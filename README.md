@@ -4,9 +4,13 @@ Asshi is a terminal-based SSH session manager built with Go and Bubble Tea. It a
 
 ## Installation
 
-### Option 1: Quick Install (Requires Go)
-If you have Go installed, you can install `asshi` directly:
+### Option 1: One-Line Install (Recommended)
+Installs to `/usr/local/bin` and runs immediately:
+```bash
+curl -sL https://raw.githubusercontent.com/allisonhere/asshi/main/install.sh | bash
+```
 
+### Option 2: Go Install
 ```bash
 go install github.com/allisonhere/asshi@latest
 ```
