@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"time"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/filepicker"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/crypto/ssh"
 )
 
 // --- Styles ---
@@ -41,6 +44,7 @@ type Host struct {
 	User         string `json:"user"`
 	Port         string `json:"port"`
 	IdentityFile string `json:"identity_file,omitempty"`
+	Password     string `json:"password,omitempty"`
 }
 
 // FilterValue implements list.Item
@@ -139,13 +143,17 @@ func initialModel() model {
 	l.Styles.Title = titleStyle
 
 	// Form inputs
-	inputs := make([]textinput.Model, 5)
-	labels := []string{"Alias", "Hostname", "User", "Port (22)", "Identity File (Optional)"}
+	inputs := make([]textinput.Model, 6)
+	labels := []string{"Alias", "Hostname", "User", "Port (22)", "Identity File (Optional)", "Password (Optional)"}
 	for i := range inputs {
 		t := textinput.New()
 		t.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 		t.Prompt = fmt.Sprintf("% -25s", labels[i]+":")
 		t.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+		if i == 5 {
+			t.EchoMode = textinput.EchoPassword
+			t.EchoCharacter = '•'
+		}
 		inputs[i] = t
 	}
 
@@ -171,25 +179,72 @@ func (m model) Init() tea.Cmd {
 
 func testConnection(h Host) tea.Cmd {
 	return func() tea.Msg {
-		// Construct SSH command to test connection (batch mode, no pwd)
-		args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no"}
-		if h.Port != "" {
-			args = append(args, "-p", h.Port)
+		if h.Hostname == "" {
+			return testConnectionMsg{err: fmt.Errorf("hostname required")}
 		}
-		if h.IdentityFile != "" {
-			args = append(args, "-i", h.IdentityFile)
+		port := h.Port
+		if port == "" {
+			port = "22"
 		}
-		target := h.Hostname
-		if h.User != "" {
-			target = h.User + "@" + h.Hostname
+		user := h.User
+		if user == "" {
+			// Fallback to current user? Or strict?
+			// Let's assume strict for test
 		}
-		args = append(args, target, "exit")
 
-		cmd := exec.Command("ssh", args...)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return testConnectionMsg{err: fmt.Errorf("%v: %s", err, string(output))}
+		config := &ssh.ClientConfig{
+			User:            user,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(), // For testing only
+			Timeout:         5 * time.Second,
 		}
+
+		var auths []ssh.AuthMethod
+
+		// 1. Password
+		if h.Password != "" {
+			auths = append(auths, ssh.Password(h.Password))
+		}
+
+		// 2. Identity File
+		if h.IdentityFile != "" {
+			key, err := os.ReadFile(h.IdentityFile)
+			if err == nil {
+				signer, err := ssh.ParsePrivateKey(key)
+				if err == nil {
+					auths = append(auths, ssh.PublicKeys(signer))
+				}
+			}
+		}
+
+		// 3. Agent (Always try if available)
+		if socket := os.Getenv("SSH_AUTH_SOCK"); socket != "" {
+			/*
+			// Commented out to avoid extra dependencies for now, 
+			// but could use "golang.org/x/crypto/ssh/agent"
+			*/
+		}
+
+		// If no auth provided, just check TCP connectivity
+		if len(auths) == 0 {
+			conn, err := net.DialTimeout("tcp", net.JoinHostPort(h.Hostname, port), 2*time.Second)
+			if err != nil {
+				return testConnectionMsg{err: fmt.Errorf("unreachable: %v", err)}
+			}
+			conn.Close()
+			return testConnectionMsg{err: fmt.Errorf("reachable, but no auth provided")}
+		}
+
+		config.Auth = auths
+		client, err := ssh.Dial("tcp", net.JoinHostPort(h.Hostname, port), config)
+		if err != nil {
+			return testConnectionMsg{err: err}
+		}
+		defer client.Close()
+
+		// Optional: Run a dummy command?
+		// session, err := client.NewSession()
+		// if err == nil { defer session.Close(); session.Run("exit") }
+
 		return testConnectionMsg{err: nil}
 	}
 }
@@ -276,6 +331,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					User:         m.inputs[2].Value(),
 					Port:         m.inputs[3].Value(),
 					IdentityFile: m.inputs[4].Value(),
+					Password:     m.inputs[5].Value(),
 				}
 				m.testStatus = "Testing connection..."
 				m.testResult = false // Reset color to neutral/fail until success
@@ -410,6 +466,7 @@ func (m *model) populateForm(h Host) {
 	m.inputs[2].SetValue(h.User)
 	m.inputs[3].SetValue(h.Port)
 	m.inputs[4].SetValue(h.IdentityFile)
+	m.inputs[5].SetValue(h.Password)
 }
 
 func (m *model) saveFromForm() {
@@ -419,6 +476,7 @@ func (m *model) saveFromForm() {
 		User:         m.inputs[2].Value(),
 		Port:         m.inputs[3].Value(),
 		IdentityFile: m.inputs[4].Value(),
+		Password:     m.inputs[5].Value(),
 	}
 
 	if m.selectedHost != nil {
@@ -485,13 +543,30 @@ func main() {
 
 		fmt.Printf("Connecting to %s...\n", h.Alias)
 		
-		binary, lookErr := exec.LookPath("ssh")
+		binary := "ssh"
+		// Check for sshpass if password is provided
+		if h.Password != "" {
+			sshpassPath, err := exec.LookPath("sshpass")
+			if err == nil {
+				// We found sshpass, use it!
+				// Usage: sshpass -p "PASSWORD" ssh ...
+				binary = sshpassPath
+				// Prepend ssh and password args
+				newArgs := []string{"-p", h.Password, "ssh"}
+				args = append(newArgs, args...)
+			} else {
+				fmt.Println("Warning: Password saved but 'sshpass' not found. You will be prompted.")
+			}
+		}
+
+		finalBinary, lookErr := exec.LookPath(binary)
 		if lookErr != nil {
-			panic(lookErr)
+			// Fallback if lookup failed (unlikely for "ssh")
+			finalBinary = binary
 		}
 
 		env := os.Environ()
-		execErr := syscall.Exec(binary, append([]string{"ssh"}, args...), env)
+		execErr := syscall.Exec(finalBinary, append([]string{binary}, args...), env)
 		if execErr != nil {
 			panic(execErr)
 		}
