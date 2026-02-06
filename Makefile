@@ -1,6 +1,7 @@
-.PHONY: all build install run clean
+.PHONY: all build install uninstall run clean
 
 BINARY_NAME=asshi
+INSTALL_PATH=/usr/local/bin
 
 all: build
 
@@ -8,7 +9,10 @@ build:
 	go build -o $(BINARY_NAME) main.go
 
 install: build
-	mv $(BINARY_NAME) /usr/local/bin/
+	sudo cp $(BINARY_NAME) $(INSTALL_PATH)/$(BINARY_NAME)
+
+uninstall:
+	sudo rm -f $(INSTALL_PATH)/$(BINARY_NAME)
 
 run:
 	go run main.go
