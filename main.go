@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 	"os"
 	"os/exec"
@@ -45,12 +46,30 @@ type Host struct {
 	Port         string `json:"port"`
 	IdentityFile string `json:"identity_file,omitempty"`
 	Password     string `json:"password,omitempty"`
+	
+	// Docker Support
+	Containers []Host `json:"containers,omitempty"` // Nested hosts (containers)
+	IsContainer bool   `json:"is_container,omitempty"`
+	Expanded    bool   `json:"-"` // UI State
+	ParentHost  *Host  `json:"-"` // Reference to parent (SSH host)
 }
 
 // FilterValue implements list.Item
-func (h Host) FilterValue() string { return h.Alias + " " + h.Hostname } 
-func (h Host) Title() string       { return h.Alias } 
+func (h Host) FilterValue() string { return h.Alias + " " + h.Hostname }
+func (h Host) Title() string {
+	if h.IsContainer {
+		return "  🐳 " + h.Alias
+	}
+	prefix := "▶ "
+	if h.Expanded {
+		prefix = "▼ "
+	}
+	return prefix + h.Alias
+}
 func (h Host) Description() string {
+	if h.IsContainer {
+		return fmt.Sprintf("Container: %s", h.Hostname)
+	}
 	desc := fmt.Sprintf("%s@%s", h.User, h.Hostname)
 	if h.Port != "" && h.Port != "22" {
 		desc += fmt.Sprintf(":%s", h.Port)
@@ -112,6 +131,7 @@ const (
 
 type model struct {
 	list          list.Model
+	rawHosts      []Host // Source of truth for tree structure
 	inputs        []textinput.Model
 	filepicker    filepicker.Model
 	focusIndex    int
@@ -124,16 +144,100 @@ type model struct {
 	testResult    bool   // true = success, false = failure
 }
 
+type scanDockerMsg struct {
+	hostIndex int
+	containers []Host
+	err error
+}
+
 type testConnectionMsg struct {
 	err error
 }
 
-func initialModel() model {
-	hosts := loadHosts()
+func scanDockerContainers(h Host, index int) tea.Cmd {
+	return func() tea.Msg {
+		// Run ssh command to get docker containers
+		// docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}"
+		cmdStr := `docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}"`
+		
+		args := []string{h.Hostname}
+		if h.User != "" {
+			args = append([]string{"-l", h.User}, args...)
+		}
+		if h.Port != "" {
+			args = append([]string{"-p", h.Port}, args...)
+		}
+		if h.IdentityFile != "" {
+			args = append([]string{"-i", h.IdentityFile}, args...)
+		}
+		// If password exists, use sshpass? 
+		// For simplicity, we assume key-based or agent for scanning to avoid hanging
+		// Or we can use the same sshpass logic if available
+		
+		finalCmd := "ssh"
+		sshArgs := append(args, cmdStr)
+		
+		if h.Password != "" {
+			sshpassPath, err := exec.LookPath("sshpass")
+			if err == nil {
+				finalBinary := sshpassPath
+				newArgs := []string{"-p", h.Password, "ssh"}
+				sshArgs = append(newArgs, sshArgs...)
+				finalCmd = finalBinary
+			}
+		}
+
+		cmd := exec.Command(finalCmd, sshArgs...)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return scanDockerMsg{hostIndex: index, err: fmt.Errorf("scan failed: %v", err)}
+		}
+
+		var containers []Host
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" { continue }
+			parts := strings.Split(line, "|")
+			if len(parts) >= 2 {
+				id := parts[0]
+				name := parts[1]
+				// image := parts[2]
+				containers = append(containers, Host{
+					Alias: name,
+					Hostname: id, // Use ID as "hostname" for exec
+					User: "root", // Default to root inside container
+					IsContainer: true,
+					ParentHost: &h, // We need to store parent connection details?
+					// Actually, we can't store pointer to struct in JSON easily
+					// We will handle parent relation at runtime or flatten config
+				})
+			}
+		}
+		return scanDockerMsg{hostIndex: index, containers: containers}
+	}
+}
+
+// Helper to flatten the tree for list view
+func flattenHosts(hosts []Host) []list.Item {
 	var items []list.Item
 	for _, h := range hosts {
+		// Create a copy to avoid modifying original state if needed
+		// but here we want to reference the expanded state
 		items = append(items, h)
+		if h.Expanded {
+			for _, c := range h.Containers {
+				// We need to pass parent info to container so it knows how to connect
+				c.ParentHost = &h 
+				items = append(items, c)
+			}
+		}
 	}
+	return items
+}
+
+func initialModel() model {
+	hosts := loadHosts()
+	items := flattenHosts(hosts)
 
 	delegate := list.NewDefaultDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -167,6 +271,7 @@ func initialModel() model {
 
 	return model{
 		list:       l,
+		rawHosts:   hosts,
 		inputs:     inputs,
 		filepicker: fp,
 		state:      stateList,
@@ -254,17 +359,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case testConnectionMsg:
-		if msg.err == nil {
-			m.testStatus = "✓ Connection Successful"
-			m.testResult = true
+	case scanDockerMsg:
+		if msg.err != nil {
+			// Handle error
 		} else {
-			m.testStatus = fmt.Sprintf("✗ Connection Failed: %v", msg.err)
-			// Truncate if too long
-			if len(m.testStatus) > 100 {
-				m.testStatus = m.testStatus[:97] + "..."
+			if msg.hostIndex >= 0 && msg.hostIndex < len(m.rawHosts) {
+				m.rawHosts[msg.hostIndex].Containers = msg.containers
+				m.rawHosts[msg.hostIndex].Expanded = true
+				m.list.SetItems(flattenHosts(m.rawHosts))
 			}
-			m.testResult = false
 		}
 		return m, nil
 
@@ -293,14 +396,85 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedHost = nil // New host
 				m.resetForm()
 				return m, nil
-			case "enter":
-				// Connect
+			case "enter", "space":
+				// Toggle expand/collapse if it has containers
+				// Or connect
 				if i, ok := m.list.SelectedItem().(Host); ok {
-					m.sshToRun = &i
-					return m, tea.Quit
+					if i.IsContainer {
+						m.sshToRun = &i
+						return m, tea.Quit
+					} else {
+						// For regular host, toggle if space
+						if msg.String() == "space" {
+							for idx, h := range m.rawHosts {
+								if h.Alias == i.Alias && h.Hostname == i.Hostname {
+									m.rawHosts[idx].Expanded = !m.rawHosts[idx].Expanded
+									m.list.SetItems(flattenHosts(m.rawHosts))
+									return m, nil
+								}
+							}
+						}
+						
+						// If enter, connect
+						if msg.String() == "enter" {
+							m.sshToRun = &i
+							return m, tea.Quit
+						}
+					}
+				}
+			case "right":
+				if i, ok := m.list.SelectedItem().(Host); ok && !i.IsContainer {
+					for idx, h := range m.rawHosts {
+						if h.Alias == i.Alias && h.Hostname == i.Hostname {
+							if !h.Expanded {
+								m.rawHosts[idx].Expanded = true
+								
+								// Auto-scan if empty
+								if len(h.Containers) == 0 {
+									// Return batch command: Update list AND scan
+									// We need to update list immediately to show expanded state (even if empty)
+									m.list.SetItems(flattenHosts(m.rawHosts))
+									return m, scanDockerContainers(m.rawHosts[idx], idx)
+								}
+								
+								m.list.SetItems(flattenHosts(m.rawHosts))
+							}
+							return m, nil
+						}
+					}
+				}
+			case "left":
+				if i, ok := m.list.SelectedItem().(Host); ok {
+					if !i.IsContainer {
+						// Collapse if expanded
+						for idx, h := range m.rawHosts {
+							if h.Alias == i.Alias && h.Hostname == i.Hostname {
+								if h.Expanded {
+									m.rawHosts[idx].Expanded = false
+									m.list.SetItems(flattenHosts(m.rawHosts))
+								}
+								return m, nil
+							}
+						}
+					}
+				}
+			case "ctrl+d":
+				// Scan Docker containers for selected host
+				if i, ok := m.list.SelectedItem().(Host); ok && !i.IsContainer {
+					// Find index in rawHosts
+					idx := -1
+					for k, h := range m.rawHosts {
+						if h.Alias == i.Alias && h.Hostname == i.Hostname {
+							idx = k
+							break
+						}
+					}
+					if idx != -1 {
+						return m, scanDockerContainers(m.rawHosts[idx], idx)
+					}
 				}
 			case "e":
-				if i, ok := m.list.SelectedItem().(Host); ok {
+				if i, ok := m.list.SelectedItem().(Host); ok && !i.IsContainer {
 					m.state = stateForm
 					m.selectedHost = &i
 					m.populateForm(i)
@@ -309,8 +483,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				// Delete
 				if index := m.list.Index(); index >= 0 && len(m.list.Items()) > 0 {
-					m.list.RemoveItem(index)
-					m.save()
+					// Need to remove from rawHosts
+					if i, ok := m.list.SelectedItem().(Host); ok {
+						for idx, h := range m.rawHosts {
+							if h.Alias == i.Alias && h.Hostname == i.Hostname {
+								m.rawHosts = append(m.rawHosts[:idx], m.rawHosts[idx+1:]...)
+								break
+							}
+						}
+						m.list.SetItems(flattenHosts(m.rawHosts))
+						m.save()
+					}
 				}
 			}
 		} else if m.state == stateFilePicker {
@@ -480,43 +663,27 @@ func (m *model) saveFromForm() {
 	}
 
 	if m.selectedHost != nil {
-		// Update existing (find by matching fields or just index if we tracked it)
-		// For simplicity in this v1, we just replace the list item if we can find it
-		// or re-load.
-		// A better way for bubbles list: update the item in place.
-		// Since we don't have stable IDs, let's just remove the old one (if exact match)
-		// actually, easiest: remove old, append new, re-sort/list.
-		// Optimization: We can just swap it in the list items.
-	}
-	
-	// Simply reloading from list state + appending/updating
-	// For MVP, just append to list and save to disk
-	items := m.list.Items()
-	
-	// If editing, we need to remove the old one first.
-	// Since we don't have a unique ID, we will just use the pointer comparison from selectedHost
-	if m.selectedHost != nil {
-		for i, item := range items {
-			if h, ok := item.(Host); ok && h == *m.selectedHost {
-				items = append(items[:i], items[i+1:]...)
+		// Update existing
+		for i, h := range m.rawHosts {
+			if h.Alias == m.selectedHost.Alias && h.Hostname == m.selectedHost.Hostname {
+				// Preserve containers/expanded state
+				newHost.Containers = h.Containers
+				newHost.Expanded = h.Expanded
+				m.rawHosts[i] = newHost
 				break
 			}
 		}
+	} else {
+		m.rawHosts = append(m.rawHosts, newHost)
 	}
 
-	items = append(items, newHost)
-	m.list.SetItems(items)
+	m.list.SetItems(flattenHosts(m.rawHosts))
 	m.save()
 }
 
 func (m *model) save() {
-	var hosts []Host
-	for _, item := range m.list.Items() {
-		if h, ok := item.(Host); ok {
-			hosts = append(hosts, h)
-		}
-	}
-	saveHosts(hosts)
+	// We save rawHosts directly
+	saveHosts(m.rawHosts)
 }
 
 func main() {
@@ -544,31 +711,133 @@ func main() {
 		fmt.Printf("Connecting to %s...\n", h.Alias)
 		
 		binary := "ssh"
-		// Check for sshpass if password is provided
-		if h.Password != "" {
-			sshpassPath, err := exec.LookPath("sshpass")
-			if err == nil {
-				// We found sshpass, use it!
-				// Usage: sshpass -p "PASSWORD" ssh ...
-				binary = sshpassPath
-				// Prepend ssh and password args
-				newArgs := []string{"-p", h.Password, "ssh"}
-				args = append(newArgs, args...)
+		// Check for sshpass if password is provided (and not already inside a container which implies parent)
+		// Logic:
+		// If normal host: ssh [args]
+		// If container: ssh [parent-args] -t "docker exec -it [id] /bin/sh"
+		
+		var finalArgs []string
+		
+		if h.IsContainer && h.ParentHost != nil {
+			// Connect to parent, then run docker exec
+			parent := h.ParentHost
+			
+			// Build parent SSH args
+			sshArgs := []string{"-t"} // Force TTY
+			if parent.User != "" {
+				sshArgs = append(sshArgs, "-l", parent.User)
+			}
+			if parent.Port != "" {
+				sshArgs = append(sshArgs, "-p", parent.Port)
+			}
+			if parent.IdentityFile != "" {
+				sshArgs = append(sshArgs, "-i", parent.IdentityFile)
+			}
+			sshArgs = append(sshArgs, parent.Hostname)
+			
+			// Append the docker command
+			// docker exec -it [containerID] /bin/sh
+			// TODO: Make shell configurable? Default to /bin/sh or /bin/bash
+			dockerCmd := fmt.Sprintf("docker exec -it %s /bin/sh", h.Hostname)
+			sshArgs = append(sshArgs, dockerCmd)
+			
+			finalArgs = sshArgs
+			
+			// Password handling for parent
+			if parent.Password != "" {
+				sshpassPath, err := exec.LookPath("sshpass")
+				if err == nil {
+					binary = sshpassPath
+					// Prepend ssh and password args
+					newArgs := []string{"-p", parent.Password, "ssh"}
+					finalArgs = append(newArgs, finalArgs...)
+				} else {
+					fmt.Println("Warning: Parent password saved but 'sshpass' not found.")
+					// Fallback to ssh
+					finalArgs = append([]string{"ssh"}, finalArgs...)
+				}
 			} else {
-				fmt.Println("Warning: Password saved but 'sshpass' not found. You will be prompted.")
+				// No password, just ssh
+				finalArgs = append([]string{"ssh"}, finalArgs...)
+			}
+			
+		} else {
+			// Normal SSH
+			finalArgs = args
+			// Password handling
+			if h.Password != "" {
+				sshpassPath, err := exec.LookPath("sshpass")
+				if err == nil {
+					binary = sshpassPath
+					newArgs := []string{"-p", h.Password, "ssh"}
+					finalArgs = append(newArgs, finalArgs...)
+				} else {
+					fmt.Println("Warning: Password saved but 'sshpass' not found.")
+					finalArgs = append([]string{"ssh"}, finalArgs...)
+				}
+			} else {
+				finalArgs = append([]string{"ssh"}, finalArgs...)
 			}
 		}
 
-		finalBinary, lookErr := exec.LookPath(binary)
+		// Execute
+		// finalArgs contains the full command line parts excluding the binary itself if it was sshpass
+		// Wait, syscall.Exec expects argv[0] to be the binary name
+		
+		// Let's simplify the construction above to just be arguments to the binary
+		// If binary is sshpass: args = [-p, pass, ssh, ...]
+		// If binary is ssh: args = [...]
+		
+		finalBinaryPath, lookErr := exec.LookPath(binary)
 		if lookErr != nil {
-			// Fallback if lookup failed (unlikely for "ssh")
-			finalBinary = binary
+			finalBinaryPath = binary
 		}
 
 		env := os.Environ()
-		execErr := syscall.Exec(finalBinary, append([]string{binary}, args...), env)
-		if execErr != nil {
-			panic(execErr)
+		// syscall.Exec(binaryPath, argv, env)
+		// argv[0] should be the binary name
+		argv := append([]string{binary}, finalArgs[1:]...) // Remove the leading "ssh" or "sshpass" we added artificially in logic above?
+		
+		// Actually, let's rewrite the logic slightly to be cleaner:
+		// We constructed finalArgs assuming it *starts* with the arguments.
+		// In the previous block:
+		// newArgs := []string{"-p", h.Password, "ssh"} -> "ssh" is an argument to sshpass
+		// finalArgs = append(newArgs, args...) -> [-p, pass, ssh, hostname...]
+		
+		// So argv should be [binary, finalArgs...]
+		// But wait, my logic above added "ssh" to finalArgs in the 'else' blocks too.
+		// "finalArgs = append([]string{"ssh"}, finalArgs...)"
+		
+		// So finalArgs is the FULL command list including the command itself.
+		// We need to separate binary and args.
+		
+		// Let's just trust finalArgs construction:
+		// [0] is what we conceptually run.
+		// But for syscall.Exec, argv[0] is the name.
+		
+		// Logic:
+		// If binary == sshpass:
+		// realArgs = [-p, pass, ssh, host...]
+		
+		// If binary == ssh:
+		// realArgs = [host...] (Original args)
+		
+		realArgs := finalArgs
+		if binary == "sshpass" {
+			realArgs = finalArgs
+		} else {
+			// binary is "ssh"
+			// Check if first arg is "ssh" (added by our logic) and strip it
+			if len(finalArgs) > 0 && finalArgs[0] == "ssh" {
+				realArgs = finalArgs[1:]
+			}
+		}
+
+		// argv[0] must be the binary name
+		argv = append([]string{binary}, realArgs...)
+
+		if err := syscall.Exec(finalBinaryPath, argv, env); err != nil {
+			panic(err)
 		}
 	}
 }
