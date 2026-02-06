@@ -1,74 +1,324 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
 
-echo -e "${GREEN}Asshi Deployment Helper${NC}"
-echo "-----------------------"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DIST_DIR="$PROJECT_DIR/dist"
+BINARY_NAME="asshi"
 
-# 1. Check for uncommitted changes
-if [[ -n $(git status --porcelain) ]]; then
-    echo -e "${RED}Warning: You have uncommitted changes.${NC}"
-    git status --short
-    read -p "Do you want to commit them now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        read -p "Enter commit message: " msg
-        git add .
-        git commit -m "$msg"
-        echo "Changes committed."
-    else
-        echo "Aborting deployment. Please clean your working directory."
-        exit 1
+# Timing
+STEP_START=0
+TOTAL_START=0
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+
+print_header() {
+    clear
+    echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║${NC}             ${BOLD}${CYAN}Asshi Release Builder${NC}                         ${BLUE}║${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+print_step() {
+    local step=$1
+    local total=$2
+    local msg=$3
+    STEP_START=$(date +%s)
+    echo ""
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}[$step/$total]${NC} ${BOLD}$msg${NC}"
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+print_substep() {
+    echo -e "  ${DIM}→${NC} $1"
+}
+
+print_success() {
+    local elapsed=$(($(date +%s) - STEP_START))
+    echo -e "  ${GREEN}✓${NC} $1 ${DIM}(${elapsed}s)${NC}"
+}
+
+print_error() {
+    echo -e "  ${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "  ${YELLOW}⚠${NC} $1"
+}
+
+print_info() {
+    echo -e "  ${BLUE}ℹ${NC} $1"
+}
+
+print_file_size() {
+    local file=$1
+    if [ -f "$file" ]; then
+        local size=$(du -h "$file" | cut -f1)
+        local name=$(basename "$file")
+        echo -e "  ${GREEN}✓${NC} ${name} ${DIM}(${size})${NC}"
     fi
-fi
+}
 
-# 2. Pull latest
-echo "Pulling latest changes..."
-git pull origin main
+format_time() {
+    local seconds=$1
+    if [ "$seconds" -ge 60 ]; then
+        local mins=$((seconds / 60))
+        local secs=$((seconds % 60))
+        echo "${mins}m ${secs}s"
+    else
+        echo "${seconds}s"
+    fi
+}
 
-# 3. Determine new version
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-echo -e "Last version: ${GREEN}$LAST_TAG${NC}"
+spinner() {
+    local pid=$1
+    local msg=$2
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
 
-read -p "Enter new version tag (e.g., v0.1.2): " NEW_TAG
+    tput civis  # Hide cursor
+    while kill -0 "$pid" 2>/dev/null;
+    do
+        i=$(( (i + 1) % 10 ))
+        printf "\r  ${CYAN}${spin:$i:1}${NC} %s" "$msg"
+        sleep 0.1
+    done
+    tput cnorm  # Show cursor
+    printf "\r"
+}
 
-if [[ -z "$NEW_TAG" ]]; then
-    echo "No version entered. Aborting."
-    exit 1
-fi
+# ============================================================================
+# VERSION MANAGEMENT
+# ============================================================================
 
-if [[ "$NEW_TAG" == "$LAST_TAG" ]]; then
-    echo -e "${RED}Error: Version $NEW_TAG already exists.${NC}"
-    exit 1
-fi
+read_version() {
+    VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+}
 
-# 4. Confirm
-echo
-echo "Ready to release:"
-echo " - Commit any pending changes (Done)"
-echo " - Push to origin/main"
-echo " - Create tag: $NEW_TAG"
-echo " - Push tag to trigger GitHub Action release"
-echo
+suggest_next_patch() {
+    NEXT_VERSION=""
+    # Remove 'v' prefix if present for calculation
+    local clean_version=${VERSION#v}
+    if [[ $clean_version =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        NEXT_VERSION="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+    fi
+}
 
-read -p "Proceed? (y/n) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
-fi
+bump_version() {
+    read_version
+    suggest_next_patch
 
-# 5. Execute
-echo "Pushing code..."
-git push origin main
+    echo -e "\n  Current version: ${GREEN}$VERSION${NC}"
 
-echo "Creating tag $NEW_TAG..."
-git tag "$NEW_TAG"
-git push origin "$NEW_TAG"
+    if [ -n "$NEXT_VERSION" ]; then
+        echo -e "  Suggested next:  ${CYAN}$NEXT_VERSION${NC}\n"
+        read -p "  Use $NEXT_VERSION? [Y/n] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            VERSION="$NEXT_VERSION"
+            print_success "Version set to $VERSION"
+        else
+            read -p "  Enter version (e.g. v1.2.3): " VERSION
+            print_success "Version set to $VERSION"
+        fi
+    else
+        read -p "  Enter version (e.g. v1.2.3): " VERSION
+        print_success "Version set to $VERSION"
+    fi
+}
 
-echo -e "${GREEN}Success! Release $NEW_TAG triggered.${NC}"
-echo "Monitor build at: https://github.com/allisonhere/asshi/actions"
+# ============================================================================
+# BUILD FUNCTIONS
+# ============================================================================
+
+clean_dist() {
+    print_substep "Removing old build artifacts..."
+    rm -rf "$DIST_DIR"
+    mkdir -p "$DIST_DIR"
+    print_success "Cleaned dist folder"
+}
+
+build_all() {
+    print_substep "Building cross-platform binaries..."
+    
+    local platforms=(
+        "linux/amd64/asshi-linux-amd64"
+        "linux/arm64/asshi-linux-arm64"
+        "darwin/amd64/asshi-darwin-amd64"
+        "darwin/arm64/asshi-darwin-arm64"
+        "windows/amd64/asshi-windows-amd64.exe"
+    )
+
+    for plat in "${platforms[@]}"; do
+        IFS="/" read -r os arch name <<< "$plat"
+        GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "$DIST_DIR/$name" main.go > /dev/null 2>&1 &
+        local pid=$!
+        spinner $pid "Building for $os/$arch..."
+        wait $pid
+        print_file_size "$DIST_DIR/$name"
+    done
+    
+    print_success "All binaries built"
+}
+
+# ============================================================================
+# GIT & RELEASE FUNCTIONS
+# ============================================================================
+
+commit_and_push() {
+    if [ -z "$(git status --porcelain)" ]; then
+        print_info "No changes to commit"
+    else
+        print_substep "Staging and committing changes..."
+        git add .
+        git commit -m "chore: release $VERSION" > /dev/null
+        print_success "Committed: release $VERSION"
+    fi
+
+    print_substep "Pushing to origin..."
+    git push origin main > /dev/null 2>&1 &
+    local pid=$!
+    spinner $pid "Pushing..."
+    wait $pid && print_success "Pushed to origin"
+}
+
+create_release() {
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) not installed"
+        return 1
+    fi
+
+    # Handle existing tag
+    if git rev-parse "$VERSION" &> /dev/null; then
+        print_warning "Tag $VERSION already exists"
+        read -p "  Delete and recreate? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            git tag -d "$VERSION" > /dev/null
+            git push origin --delete "$VERSION" 2>/dev/null || true
+            print_success "Old tag deleted"
+        else
+            return 1
+        fi
+    fi
+
+    print_substep "Creating and pushing tag $VERSION..."
+    git tag -a "$VERSION" -m "Release $VERSION"
+    git push origin "$VERSION" > /dev/null 2>&1
+    print_success "Tag $VERSION pushed"
+
+    print_substep "Creating GitHub release..."
+    gh release create "$VERSION" \
+        --title "Asshi $VERSION" \
+        --notes "Release $VERSION" \
+        --repo allisonhere/asshi > /dev/null 2>&1
+    print_success "Release created"
+
+    print_substep "Uploading assets..."
+    for f in "$DIST_DIR"/*; do
+        if [ -f "$f" ]; then
+            gh release upload "$VERSION" "$f" --repo allisonhere/asshi > /dev/null 2>&1
+            print_file_size "$f"
+        fi
+    done
+    print_success "Assets uploaded"
+    echo -e "  ${GREEN}→${NC} https://github.com/allisonhere/asshi/releases/tag/$VERSION"
+}
+
+full_release() {
+    TOTAL_START=$(date +%s)
+    local total_steps=5
+
+    print_step 1 $total_steps "Version bump"
+    bump_version
+
+    print_step 2 $total_steps "Cleaning dist"
+    clean_dist
+
+    print_step 3 $total_steps "Building binaries"
+    build_all
+
+    print_step 4 $total_steps "Git Push"
+    commit_and_push
+
+    print_step 5 $total_steps "GitHub Release"
+    create_release
+
+    local total_time=$(($(date +%s) - TOTAL_START))
+    echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${GREEN}  ✓ Release $VERSION complete!${NC} ${DIM}($(format_time $total_time))${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+}
+
+# ============================================================================
+# MAIN MENU
+# ============================================================================
+
+show_status() {
+    read_version
+    suggest_next_patch
+    echo -e "  ${BOLD}Version:${NC}  ${GREEN}$VERSION${NC}"
+    [ -n "$NEXT_VERSION" ] && echo -e "  ${BOLD}Next:${NC}     ${DIM}$NEXT_VERSION${NC}"
+    
+    local changes=$(git status --porcelain | wc -l)
+    if [ "$changes" -gt 0 ]; then
+        echo -e "  ${BOLD}Git:${NC}      ${YELLOW}$changes uncommitted change(s)${NC}"
+    else
+        echo -e "  ${BOLD}Git:${NC}      ${GREEN}clean${NC}"
+    fi
+    echo ""
+}
+
+main_menu() {
+    while true; do
+        print_header
+        show_status
+
+        echo -e "  ${BOLD}${CYAN}Actions${NC}"
+        echo -e "  ${DIM}─────────────────────────────${NC}"
+        echo "   1) Bump version"
+        echo "   2) Clean dist"
+        echo "   3) Build all binaries"
+        echo "   4) Push to main"
+        echo ""
+        echo -e "  ${BOLD}${CYAN}Release${NC}"
+        echo -e "  ${DIM}─────────────────────────────${NC}"
+        echo "   5) Create GitHub release only"
+        echo -e "   6) ${GREEN}Full release (recommended)${NC}"
+        echo ""
+        echo "   0) Exit"
+        echo ""
+
+        read -p "  Choose [0-6]: " choice
+
+        case $choice in
+            1) bump_version ;;
+            2) clean_dist ;;
+            3) build_all ;;
+            4) commit_and_push ;;
+            5) create_release ;;
+            6) full_release ;;
+            0) echo -e "\n  ${DIM}Bye!${NC}\n"; exit 0 ;;
+            *) print_error "Invalid choice" ;;
+        esac
+
+        echo ""
+        read -p "  Press Enter to continue..." -r
+    done
+}
+
+main_menu
