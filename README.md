@@ -61,3 +61,7 @@ assho
 ## Configuration
 
 Sessions are stored in `~/.config/assho/hosts.json`.
+
+## Screenshot
+
+![Assho dashboard screenshot](screenshot.png)
