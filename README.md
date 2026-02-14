@@ -25,15 +25,12 @@ cd assho
 sudo make install
 ```
 
-### Option 4: Manual Build (Cross-Platform)
+### Option 4: Manual Build
 You can build the binary for your specific OS:
 
 ```bash
 # Linux / macOS
 go build -o assho main.go
-
-# Windows
-GOOS=windows GOARCH=amd64 go build -o assho.exe main.go
 ```
 
 ## Usage

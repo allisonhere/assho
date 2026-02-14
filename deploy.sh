@@ -160,7 +160,6 @@ build_all() {
         "linux/arm64/assho-linux-arm64"
         "darwin/amd64/assho-darwin-amd64"
         "darwin/arm64/assho-darwin-arm64"
-        "windows/amd64/assho-windows-amd64.exe"
     )
 
     for plat in "${platforms[@]}"; do
