@@ -1,5 +1,9 @@
 # Assho (A Simple SSH Interface)
 
+## Screenshot
+
+![Assho dashboard screenshot](screenshot.png)
+
 Assho is a terminal-based SSH session manager built with Go and Bubble Tea. It allows you to save, manage, and quickly connect to your SSH hosts without remembering IP addresses or flags.
 
 ## Installation
@@ -61,7 +65,3 @@ assho
 ## Configuration
 
 Sessions are stored in `~/.config/assho/hosts.json`.
-
-## Screenshot
-
-![Assho dashboard screenshot](screenshot.png)
