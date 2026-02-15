@@ -164,7 +164,7 @@ build_all() {
 
     for plat in "${platforms[@]}"; do
         IFS="/" read -r os arch name <<< "$plat"
-        GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "$DIST_DIR/$name" main.go > /dev/null 2>&1 &
+        GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "$DIST_DIR/$name" . > /dev/null 2>&1 &
         local pid=$!
         spinner $pid "Building for $os/$arch..."
         wait $pid
@@ -178,7 +178,7 @@ build_all() {
 # GIT & RELEASE FUNCTIONS
 # ============================================================================
 
-commit_and_push() {
+commit_changes() {
     if [ -z "$(git status --porcelain)" ]; then
         print_info "No changes to commit"
     else
@@ -187,7 +187,9 @@ commit_and_push() {
         git commit -m "chore: release $VERSION" > /dev/null
         print_success "Committed: release $VERSION"
     fi
+}
 
+push_to_origin() {
     print_substep "Pushing to origin..."
     git push origin main > /dev/null 2>&1 &
     local pid=$!
@@ -240,21 +242,24 @@ create_release() {
 
 full_release() {
     TOTAL_START=$(date +%s)
-    local total_steps=5
+    local total_steps=6
 
     print_step 1 $total_steps "Version bump"
     bump_version
 
-    print_step 2 $total_steps "Cleaning dist"
+    print_step 2 $total_steps "Commit changes"
+    commit_changes
+
+    print_step 3 $total_steps "Push to origin"
+    push_to_origin
+
+    print_step 4 $total_steps "Cleaning dist"
     clean_dist
 
-    print_step 3 $total_steps "Building binaries"
+    print_step 5 $total_steps "Building binaries"
     build_all
 
-    print_step 4 $total_steps "Git Push"
-    commit_and_push
-
-    print_step 5 $total_steps "GitHub Release"
+    print_step 6 $total_steps "GitHub Release"
     create_release
 
     local total_time=$(($(date +%s) - TOTAL_START))
@@ -290,27 +295,29 @@ main_menu() {
         echo -e "  ${BOLD}${CYAN}Actions${NC}"
         echo -e "  ${DIM}─────────────────────────────${NC}"
         echo "   1) Bump version"
-        echo "   2) Clean dist"
-        echo "   3) Build all binaries"
-        echo "   4) Push to main"
+        echo "   2) Commit changes"
+        echo "   3) Push to main"
+        echo "   4) Clean dist"
+        echo "   5) Build all binaries"
         echo ""
         echo -e "  ${BOLD}${CYAN}Release${NC}"
         echo -e "  ${DIM}─────────────────────────────${NC}"
-        echo "   5) Create GitHub release only"
-        echo -e "   6) ${GREEN}Full release (recommended)${NC}"
+        echo "   6) Create GitHub release only"
+        echo -e "   7) ${GREEN}Full release (recommended)${NC}"
         echo ""
         echo "   0) Exit"
         echo ""
 
-        read -p "  Choose [0-6]: " choice
+        read -p "  Choose [0-7]: " choice
 
         case $choice in
             1) bump_version ;;
-            2) clean_dist ;;
-            3) build_all ;;
-            4) commit_and_push ;;
-            5) create_release ;;
-            6) full_release ;;
+            2) commit_changes ;;
+            3) push_to_origin ;;
+            4) clean_dist ;;
+            5) build_all ;;
+            6) create_release ;;
+            7) full_release ;;
             0) echo -e "\n  ${DIM}Bye!${NC}\n"; exit 0 ;;
             *) print_error "Invalid choice" ;;
         esac
