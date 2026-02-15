@@ -184,6 +184,7 @@ func renderListHelp() string {
 		helpEntry("ctrl+d", "scan"),
 		helpEntry("h", "history"),
 		helpEntry("i", "import"),
+		helpEntry("⇧↑↓", "move"),
 		helpEntry("a", "about"),
 		helpEntry("q", "quit"),
 	}

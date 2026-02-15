@@ -546,6 +546,99 @@ func (m *model) openGroupPrompt(action, targetID, initialName string) {
 	m.groupInput.Focus()
 }
 
+// moveItem reorders the selected item in the list by swapping it with its
+// neighbor in the given direction (-1 = up, +1 = down). Groups swap with
+// adjacent groups; hosts swap with the adjacent host in the same group.
+// Returns a non-empty status message on error or no-op.
+func (m *model) moveItem(direction int) string {
+	sel := m.list.SelectedItem()
+	if sel == nil {
+		return ""
+	}
+
+	switch item := sel.(type) {
+	case groupItem:
+		idx := findGroupIndexByID(m.rawGroups, item.ID)
+		if idx == -1 {
+			return ""
+		}
+		newIdx := idx + direction
+		if newIdx < 0 || newIdx >= len(m.rawGroups) {
+			return ""
+		}
+		snapshot := m.snapshot()
+		m.rawGroups[idx], m.rawGroups[newIdx] = m.rawGroups[newIdx], m.rawGroups[idx]
+		m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+		if err := m.save(); err != nil {
+			m.restoreSnapshot(snapshot)
+			return fmt.Sprintf("Failed to reorder: %v", err)
+		}
+		// Reselect the moved item.
+		m.reselectItem(item.ID, true)
+		return ""
+
+	case Host:
+		if item.IsContainer {
+			return ""
+		}
+		idx := findHostIndexByID(m.rawHosts, item.ID)
+		if idx == -1 {
+			return ""
+		}
+		groupID := m.rawHosts[idx].GroupID
+
+		// Find the neighbor in the same group.
+		neighborIdx := -1
+		if direction < 0 {
+			for i := idx - 1; i >= 0; i-- {
+				if m.rawHosts[i].GroupID == groupID {
+					neighborIdx = i
+					break
+				}
+			}
+		} else {
+			for i := idx + 1; i < len(m.rawHosts); i++ {
+				if m.rawHosts[i].GroupID == groupID {
+					neighborIdx = i
+					break
+				}
+			}
+		}
+		if neighborIdx == -1 {
+			return ""
+		}
+
+		snapshot := m.snapshot()
+		m.rawHosts[idx], m.rawHosts[neighborIdx] = m.rawHosts[neighborIdx], m.rawHosts[idx]
+		m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+		if err := m.save(); err != nil {
+			m.restoreSnapshot(snapshot)
+			return fmt.Sprintf("Failed to reorder: %v", err)
+		}
+		// Reselect the moved item.
+		m.reselectItem(item.ID, false)
+		return ""
+	}
+	return ""
+}
+
+// reselectItem finds an item by ID in the flat list and selects it.
+func (m *model) reselectItem(id string, isGroup bool) {
+	for i, it := range m.list.Items() {
+		if isGroup {
+			if g, ok := it.(groupItem); ok && g.ID == id {
+				m.list.Select(i)
+				return
+			}
+		} else {
+			if h, ok := it.(Host); ok && h.ID == id {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+}
+
 func (m *model) clearListDeleteConfirm() {
 	m.listDeleteArmed = false
 	m.listDeleteID = ""

@@ -312,6 +312,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.openGroupPrompt("rename", g.ID, g.Name)
 					return m, nil
 				}
+			case "shift+up":
+				if msg := m.moveItem(-1); msg != "" {
+					m.statusMessage = msg
+					m.statusIsError = true
+				}
+				return m, nil
+			case "shift+down":
+				if msg := m.moveItem(+1); msg != "" {
+					m.statusMessage = msg
+					m.statusIsError = true
+				}
+				return m, nil
 			case "x":
 				if g, ok := m.list.SelectedItem().(groupItem); ok {
 					if err := m.deleteGroupByID(g.ID); err != nil {

@@ -80,6 +80,7 @@ assho --version  # print version
 | `←` | Collapse |
 | `Ctrl+D` | Scan for Docker containers |
 | `i` | Import from `~/.ssh/config` |
+| `Shift+↑` / `Shift+↓` | Reorder hosts / groups |
 | `g` | Create group |
 | `r` | Rename group |
 | `a` | About |
