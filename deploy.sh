@@ -194,7 +194,12 @@ push_to_origin() {
     git push origin main > /dev/null 2>&1 &
     local pid=$!
     spinner $pid "Pushing..."
-    wait $pid && print_success "Pushed to origin"
+    if wait $pid; then
+        print_success "Pushed to origin"
+    else
+        print_error "Push failed (check remote/auth)"
+        return 1
+    fi
 }
 
 create_release() {
