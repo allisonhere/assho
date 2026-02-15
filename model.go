@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -65,6 +66,44 @@ type model struct {
 	aboutOpen       bool
 	aboutFrame      int
 	headerFrame     int
+}
+
+type modelSnapshot struct {
+	rawGroups []Group
+	rawHosts  []Host
+	history   []HistoryEntry
+}
+
+func cloneGroups(groups []Group) []Group {
+	if len(groups) == 0 {
+		return nil
+	}
+	cloned := make([]Group, len(groups))
+	copy(cloned, groups)
+	return cloned
+}
+
+func cloneHosts(hosts []Host) []Host {
+	if len(hosts) == 0 {
+		return nil
+	}
+	cloned := make([]Host, len(hosts))
+	for i := range hosts {
+		cloned[i] = hosts[i]
+		if len(hosts[i].Containers) > 0 {
+			cloned[i].Containers = cloneHosts(hosts[i].Containers)
+		}
+	}
+	return cloned
+}
+
+func cloneHistory(history []HistoryEntry) []HistoryEntry {
+	if len(history) == 0 {
+		return nil
+	}
+	cloned := make([]HistoryEntry, len(history))
+	copy(cloned, history)
+	return cloned
 }
 
 // Helper to flatten the tree for list view
@@ -153,7 +192,13 @@ func initialModel() model {
 	var groupsUpdated bool
 	groups, groupsUpdated = ensureGroupIDs(groups)
 	if hostsUpdated || groupsUpdated {
-		_ = saveConfig(groups, hosts, history)
+		if err := saveConfig(groups, hosts, history); err != nil {
+			if loadErr != nil {
+				loadErr = errors.Join(loadErr, err)
+			} else {
+				loadErr = err
+			}
+		}
 	}
 	items := flattenHosts(groups, hosts)
 
@@ -310,6 +355,8 @@ func (m *model) populateForm(h Host) {
 }
 
 func (m *model) saveFromForm() error {
+	snapshot := m.snapshot()
+
 	alias := strings.TrimSpace(m.inputs[0].Value())
 	if alias == "" {
 		return fmt.Errorf("alias is required")
@@ -380,12 +427,15 @@ func (m *model) saveFromForm() error {
 	}
 
 	m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-	m.save()
+	if err := m.save(); err != nil {
+		m.restoreSnapshot(snapshot)
+		return fmt.Errorf("failed to save changes: %w", err)
+	}
 	return nil
 }
 
-func (m *model) save() {
-	saveConfig(m.rawGroups, m.rawHosts, m.history)
+func (m *model) save() error {
+	return saveConfig(m.rawGroups, m.rawHosts, m.history)
 }
 
 func (m *model) rebuildHistoryList() {
@@ -464,7 +514,9 @@ func (m *model) applyGroupSelectionToInput() {
 	m.inputs[6].SetValue(m.groupOptions[m.groupIndex])
 }
 
-func (m *model) deleteGroupByID(groupID string) {
+func (m *model) deleteGroupByID(groupID string) error {
+	snapshot := m.snapshot()
+
 	for idx := range m.rawGroups {
 		if m.rawGroups[idx].ID == groupID {
 			m.rawGroups = append(m.rawGroups[:idx], m.rawGroups[idx+1:]...)
@@ -477,7 +529,11 @@ func (m *model) deleteGroupByID(groupID string) {
 		}
 	}
 	m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-	m.save()
+	if err := m.save(); err != nil {
+		m.restoreSnapshot(snapshot)
+		return err
+	}
+	return nil
 }
 
 func (m *model) openGroupPrompt(action, targetID, initialName string) {
@@ -495,4 +551,20 @@ func (m *model) clearListDeleteConfirm() {
 	m.listDeleteID = ""
 	m.listDeleteType = ""
 	m.listDeleteLabel = ""
+}
+
+func (m *model) snapshot() modelSnapshot {
+	return modelSnapshot{
+		rawGroups: cloneGroups(m.rawGroups),
+		rawHosts:  cloneHosts(m.rawHosts),
+		history:   cloneHistory(m.history),
+	}
+}
+
+func (m *model) restoreSnapshot(snapshot modelSnapshot) {
+	m.rawGroups = snapshot.rawGroups
+	m.rawHosts = snapshot.rawHosts
+	m.history = snapshot.history
+	m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+	m.rebuildHistoryList()
 }

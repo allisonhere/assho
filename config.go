@@ -350,7 +350,9 @@ func loadConfig() ([]Group, []Host, []HistoryEntry, error) {
 				cfg.Version = 1
 			}
 			if loadedFromLegacy {
-				_ = saveConfig(cfg.Groups, cfg.Hosts, cfg.History)
+				if err := saveConfig(cfg.Groups, cfg.Hosts, cfg.History); err != nil {
+					return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, fmt.Errorf("migrated legacy config but failed to persist new path: %w", err)
+				}
 			}
 			return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, nil
 		}
@@ -360,7 +362,9 @@ func loadConfig() ([]Group, []Host, []HistoryEntry, error) {
 	var hosts []Host
 	if err := json.Unmarshal(bytes, &hosts); err == nil {
 		if loadedFromLegacy {
-			_ = saveConfig([]Group{}, hosts, nil)
+			if err := saveConfig([]Group{}, hosts, nil); err != nil {
+				return []Group{}, hydrateHostPasswords(hosts), nil, fmt.Errorf("migrated legacy hosts but failed to persist new path: %w", err)
+			}
 		}
 		return []Group{}, hydrateHostPasswords(hosts), nil, nil
 	}

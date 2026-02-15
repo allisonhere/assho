@@ -120,8 +120,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case Host:
 					if i.IsContainer {
 						m.clearListDeleteConfirm()
+						snapshot := m.snapshot()
 						m.history = recordHistory(i.ID, i.Alias, m.history)
-						m.save()
+						if err := m.save(); err != nil {
+							m.restoreSnapshot(snapshot)
+							m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
+							m.statusIsError = true
+							return m, nil
+						}
 						m.sshToRun = &i
 						return m, tea.Quit
 					}
@@ -136,8 +142,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if msg.String() == "enter" {
 						m.clearListDeleteConfirm()
+						snapshot := m.snapshot()
 						m.history = recordHistory(i.ID, i.Alias, m.history)
-						m.save()
+						if err := m.save(); err != nil {
+							m.restoreSnapshot(snapshot)
+							m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
+							m.statusIsError = true
+							return m, nil
+						}
 						m.sshToRun = &i
 						return m, tea.Quit
 					}
@@ -232,7 +244,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.listDeleteLabel = g.Name
 							return m, nil
 						}
-						m.deleteGroupByID(g.ID)
+						if err := m.deleteGroupByID(g.ID); err != nil {
+							m.statusMessage = fmt.Sprintf("Failed to save group deletion: %v", err)
+							m.statusIsError = true
+							return m, nil
+						}
 						m.clearListDeleteConfirm()
 						return m, nil
 					}
@@ -244,6 +260,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.listDeleteLabel = i.Alias
 							return m, nil
 						}
+						snapshot := m.snapshot()
 						for idx, h := range m.rawHosts {
 							if h.ID == i.ID {
 								m.rawHosts = append(m.rawHosts[:idx], m.rawHosts[idx+1:]...)
@@ -251,7 +268,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 						m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-						m.save()
+						if err := m.save(); err != nil {
+							m.restoreSnapshot(snapshot)
+							m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
+							m.statusIsError = true
+							return m, nil
+						}
 						m.clearListDeleteConfirm()
 					}
 				}
@@ -262,9 +284,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.statusIsError = true
 					return m, nil
 				}
+				snapshot := m.snapshot()
 				m.rawHosts = append(m.rawHosts, imported...)
 				m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-				m.save()
+				if err := m.save(); err != nil {
+					m.restoreSnapshot(snapshot)
+					m.statusMessage = fmt.Sprintf("Imported %d hosts but failed to save: %v", len(imported), err)
+					m.statusIsError = true
+					return m, nil
+				}
 				m.statusMessage = fmt.Sprintf("Imported %d hosts (%d skipped)", len(imported), skipped)
 				m.statusIsError = false
 				return m, nil
@@ -286,7 +314,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "x":
 				if g, ok := m.list.SelectedItem().(groupItem); ok {
-					m.deleteGroupByID(g.ID)
+					if err := m.deleteGroupByID(g.ID); err != nil {
+						m.statusMessage = fmt.Sprintf("Failed to save group deletion: %v", err)
+						m.statusIsError = true
+					}
 					return m, nil
 				}
 			}
@@ -409,6 +440,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.deleteArmed = true
 						return m, nil
 					}
+					snapshot := m.snapshot()
 					for idx, h := range m.rawHosts {
 						if h.ID == m.selectedHost.ID {
 							m.rawHosts = append(m.rawHosts[:idx], m.rawHosts[idx+1:]...)
@@ -416,7 +448,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-					m.save()
+					if err := m.save(); err != nil {
+						m.restoreSnapshot(snapshot)
+						m.state = stateList
+						m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
+						m.statusIsError = true
+						m.deleteFocus = false
+						m.deleteArmed = false
+						return m, nil
+					}
 					m.state = stateList
 					m.deleteFocus = false
 					m.deleteArmed = false
@@ -511,17 +551,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				if m.groupAction == "create" {
+					snapshot := m.snapshot()
 					m.rawGroups = append(m.rawGroups, Group{ID: newHostID(), Name: name, Expanded: true})
+					m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+					if err := m.save(); err != nil {
+						m.restoreSnapshot(snapshot)
+						m.formError = fmt.Sprintf("failed to save group changes: %v", err)
+						return m, nil
+					}
 				} else if m.groupAction == "rename" {
+					snapshot := m.snapshot()
 					for i := range m.rawGroups {
 						if m.rawGroups[i].ID == m.groupTarget {
 							m.rawGroups[i].Name = name
 							break
 						}
 					}
+					m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+					if err := m.save(); err != nil {
+						m.restoreSnapshot(snapshot)
+						m.formError = fmt.Sprintf("failed to save group changes: %v", err)
+						return m, nil
+					}
 				}
-				m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-				m.save()
 				m.state = stateList
 				m.groupAction = ""
 				m.groupTarget = ""
@@ -545,8 +597,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Deleted host — cannot connect
 						return m, nil
 					}
+					snapshot := m.snapshot()
 					m.history = recordHistory(i.ID, i.Alias, m.history)
-					m.save()
+					if err := m.save(); err != nil {
+						m.restoreSnapshot(snapshot)
+						m.state = stateList
+						m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
+						m.statusIsError = true
+						return m, nil
+					}
 					m.sshToRun = &i
 					return m, tea.Quit
 				}
