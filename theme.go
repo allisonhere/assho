@@ -182,13 +182,13 @@ func renderListHelp(selected list.Item) string {
 	case Host:
 		if item.IsContainer {
 			contextEntries = []string{
-				helpEntry("enter", "connect"),
+				helpEntry("enter", "conn"),
 			}
 		} else {
 			contextEntries = []string{
-				helpEntry("enter", "connect"),
+				helpEntry("enter", "conn"),
 				helpEntry("e", "edit"),
-				helpEntry("d", "delete"),
+				helpEntry("d", "del"),
 				helpEntry("space", "expand"),
 				helpEntry("ctrl+d", "scan"),
 				helpEntry("⇧↑↓", "move"),
@@ -198,16 +198,16 @@ func renderListHelp(selected list.Item) string {
 		contextEntries = []string{
 			helpEntry("enter", "toggle"),
 			helpEntry("r", "rename"),
-			helpEntry("d", "delete"),
+			helpEntry("d", "del"),
 			helpEntry("⇧↑↓", "move"),
 		}
 	}
 
 	baseEntries := []string{
 		helpEntry("n", "new"),
-		helpEntry("/", "filter"),
-		helpEntry("h", "history"),
-		helpEntry("i", "import"),
+		helpEntry("/", "filt"),
+		helpEntry("h", "hist"),
+		helpEntry("i", "imp"),
 		helpEntry("a", "about"),
 		helpEntry("q", "quit"),
 	}
@@ -222,8 +222,8 @@ func renderFormHelp() string {
 		helpEntry("tab", "next"),
 		helpEntry("enter", "save"),
 		helpEntry("ctrl+t", "test"),
-		helpEntry("enter on pick", "file picker"),
-		helpEntry("arrows on group", "select"),
+		helpEntry("enter", "pick file"),
+		helpEntry("arrows", "group"),
 		helpEntry("esc", "cancel"),
 	}
 	sep := helpSepStyle.Render(" | ")
@@ -232,7 +232,7 @@ func renderFormHelp() string {
 
 func renderHistoryHelp() string {
 	entries := []string{
-		helpEntry("enter", "connect"),
+		helpEntry("enter", "conn"),
 		helpEntry("e", "edit"),
 		helpEntry("h", "back"),
 		helpEntry("esc", "back"),
@@ -243,7 +243,7 @@ func renderHistoryHelp() string {
 
 func renderFilePickerHelp() string {
 	entries := []string{
-		helpEntry("arrows", "navigate"),
+		helpEntry("arrows", "nav"),
 		helpEntry("enter", "select"),
 		helpEntry("esc", "cancel"),
 	}
