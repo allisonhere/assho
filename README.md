@@ -5,7 +5,7 @@
 <h1 align="center">Assho</h1>
 
 <p align="center">
-  <strong>A</strong>nother <strong>SSH</strong> Host <strong>O</strong>rganizer<br>
+  <strong>A</strong>nother <strong>SSH</strong> <strong>O</strong>rganizer<br>
   <em>A fast, beautiful TUI for managing and connecting to your SSH hosts.</em>
 </p>
 
