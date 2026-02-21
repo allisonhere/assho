@@ -154,6 +154,87 @@ func importSSHConfig(existing []Host) (imported []Host, skipped int, err error) 
 	return imported, skipped, nil
 }
 
+// exportSSHConfig appends all non-container, non-duplicate hosts to
+// ~/.ssh/config. Returns (exported, skipped, error).
+func exportSSHConfig(hosts []Host) (exported int, skipped int, err error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return 0, 0, fmt.Errorf("cannot create .ssh directory: %w", err)
+	}
+	configPath := filepath.Join(sshDir, "config")
+
+	// Build set of aliases already present in the SSH config.
+	existingContent, _ := os.ReadFile(configPath)
+	existingAliases := map[string]bool{}
+	for _, line := range strings.Split(string(existingContent), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(strings.ToLower(line), "host ") {
+			continue
+		}
+		for _, alias := range strings.Fields(line[5:]) {
+			if !isWildcard(alias) {
+				existingAliases[strings.ToLower(alias)] = true
+			}
+		}
+	}
+
+	var entries []string
+	for _, h := range hosts {
+		if h.IsContainer || h.Alias == "" || h.Hostname == "" {
+			continue
+		}
+		key := strings.ToLower(h.Alias)
+		if existingAliases[key] {
+			skipped++
+			continue
+		}
+		existingAliases[key] = true // prevent dupes within this export
+
+		var lines []string
+		lines = append(lines, "Host "+h.Alias)
+		lines = append(lines, "    HostName "+h.Hostname)
+		if h.User != "" {
+			lines = append(lines, "    User "+h.User)
+		}
+		if h.Port != "" && h.Port != "22" {
+			lines = append(lines, "    Port "+h.Port)
+		}
+		if h.IdentityFile != "" {
+			lines = append(lines, "    IdentityFile "+h.IdentityFile)
+		}
+		if h.ProxyJump != "" {
+			lines = append(lines, "    ProxyJump "+h.ProxyJump)
+		}
+		entries = append(entries, strings.Join(lines, "\n"))
+		exported++
+	}
+
+	if exported == 0 {
+		return 0, skipped, nil
+	}
+
+	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return 0, skipped, fmt.Errorf("cannot open SSH config: %w", err)
+	}
+	defer f.Close()
+
+	// Ensure there is a blank line before our block if the file has content.
+	if len(existingContent) > 0 {
+		sep := "\n"
+		if !strings.HasSuffix(string(existingContent), "\n") {
+			sep = "\n\n"
+		}
+		fmt.Fprint(f, sep)
+	}
+	_, err = fmt.Fprint(f, strings.Join(entries, "\n\n")+"\n")
+	return exported, skipped, err
+}
+
 // splitDirective splits an SSH config line into keyword and the rest.
 func splitDirective(line string) (keyword, args string) {
 	// SSH config allows = or whitespace as separator.

@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type scanDockerMsg struct {
@@ -22,22 +19,6 @@ type scanDockerMsg struct {
 
 type testConnectionMsg struct {
 	err error
-}
-
-func hostKeyCallback() ssh.HostKeyCallback {
-	if allowInsecureTest() {
-		return ssh.InsecureIgnoreHostKey()
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ssh.InsecureIgnoreHostKey()
-	}
-	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
-	cb, err := knownhosts.New(knownHostsPath)
-	if err != nil {
-		return ssh.InsecureIgnoreHostKey()
-	}
-	return cb
 }
 
 func testConnection(h Host) tea.Cmd {

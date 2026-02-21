@@ -286,3 +286,35 @@ func TestSnapshotRestoreRoundTrip(t *testing.T) {
 		t.Fatalf("expected history restore, got %+v", m.history[0])
 	}
 }
+
+func TestSaveFromFormPortValidation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ASSHO_STORE_PASSWORD", "0")
+
+	newModel := func() model {
+		m := model{inputs: newFormInputs(), historyList: newTestHistoryListModel()}
+		m.list = newTestListModel(nil, nil)
+		m.inputs[fieldAlias].SetValue("web")
+		m.inputs[fieldHostname].SetValue("10.0.0.1")
+		return m
+	}
+
+	invalidPorts := []string{"abc", "0", "65536", "-1", "99999"}
+	for _, p := range invalidPorts {
+		m := newModel()
+		m.inputs[fieldPort].SetValue(p)
+		if err := m.saveFromForm(); err == nil {
+			t.Errorf("expected error for invalid port %q, got nil", p)
+		}
+	}
+
+	validPorts := []string{"", "22", "1", "65535", "2222"}
+	for _, p := range validPorts {
+		m := newModel()
+		m.inputs[fieldPort].SetValue(p)
+		if err := m.saveFromForm(); err != nil {
+			t.Errorf("expected no error for valid port %q, got: %v", p, err)
+		}
+	}
+}

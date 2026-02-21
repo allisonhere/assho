@@ -166,6 +166,103 @@ Host after-match
 	}
 }
 
+func TestExportSSHConfigBasic(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hosts := []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1", User: "deploy", Port: "2222", IdentityFile: "~/.ssh/id_web"},
+		{ID: "h2", Alias: "db", Hostname: "db.example.com", User: "admin", Port: "22"},
+		{ID: "h3", Alias: "proxy", Hostname: "jump.example.com", ProxyJump: "bastion"},
+	}
+
+	exported, skipped, err := exportSSHConfig(hosts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exported != 3 || skipped != 0 {
+		t.Fatalf("expected exported=3 skipped=0, got exported=%d skipped=%d", exported, skipped)
+	}
+
+	content, err := os.ReadFile(filepath.Join(home, ".ssh", "config"))
+	if err != nil {
+		t.Fatalf("cannot read written config: %v", err)
+	}
+	s := string(content)
+	if !strings.Contains(s, "Host web") || !strings.Contains(s, "HostName 10.0.0.1") {
+		t.Errorf("missing web host block in output:\n%s", s)
+	}
+	if !strings.Contains(s, "Port 2222") {
+		t.Errorf("expected non-default port in output:\n%s", s)
+	}
+	if strings.Contains(s, "Port 22\n") {
+		t.Errorf("default port 22 should be omitted:\n%s", s)
+	}
+	if !strings.Contains(s, "IdentityFile ~/.ssh/id_web") {
+		t.Errorf("missing IdentityFile in output:\n%s", s)
+	}
+	if !strings.Contains(s, "ProxyJump bastion") {
+		t.Errorf("missing ProxyJump in output:\n%s", s)
+	}
+}
+
+func TestExportSSHConfigSkipsDuplicatesAndContainers(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Write a pre-existing SSH config with one host.
+	sshDir := filepath.Join(home, ".ssh")
+	_ = os.MkdirAll(sshDir, 0700)
+	existing := "Host already-there\n    HostName 9.9.9.9\n"
+	_ = os.WriteFile(filepath.Join(sshDir, "config"), []byte(existing), 0600)
+
+	hosts := []Host{
+		{ID: "h1", Alias: "already-there", Hostname: "9.9.9.9"},
+		{ID: "h2", Alias: "new-host", Hostname: "1.2.3.4"},
+		{ID: "c1", Alias: "my-container", Hostname: "abc123", IsContainer: true},
+		{ID: "h3", Alias: "", Hostname: "no-alias.example.com"}, // no alias
+	}
+
+	exported, skipped, err := exportSSHConfig(hosts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exported != 1 {
+		t.Fatalf("expected 1 exported, got %d", exported)
+	}
+	if skipped != 1 {
+		t.Fatalf("expected 1 skipped (already-there), got %d", skipped)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(sshDir, "config"))
+	s := string(content)
+	if !strings.Contains(s, "Host new-host") {
+		t.Errorf("expected new-host in output:\n%s", s)
+	}
+	if strings.Contains(s, "my-container") || strings.Contains(s, "no-alias") {
+		t.Errorf("container/no-alias host should not appear:\n%s", s)
+	}
+}
+
+func TestExportSSHConfigZeroExported(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// All hosts already present.
+	sshDir := filepath.Join(home, ".ssh")
+	_ = os.MkdirAll(sshDir, 0700)
+	_ = os.WriteFile(filepath.Join(sshDir, "config"), []byte("Host web\n    HostName 1.1.1.1\n"), 0600)
+
+	hosts := []Host{{ID: "h1", Alias: "web", Hostname: "1.1.1.1"}}
+	exported, skipped, err := exportSSHConfig(hosts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exported != 0 || skipped != 1 {
+		t.Fatalf("expected exported=0 skipped=1, got exported=%d skipped=%d", exported, skipped)
+	}
+}
+
 func TestImportSSHConfigDeduplicates(t *testing.T) {
 	config := `
 Host existing-host

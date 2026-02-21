@@ -58,13 +58,11 @@ func TestSaveFromFormRollsBackOnSaveError(t *testing.T) {
 	m.list = newTestListModel(m.rawGroups, m.rawHosts)
 	m.buildGroupOptions("")
 
-	m.inputs[0].SetValue("api")
-	m.inputs[1].SetValue("10.0.0.2")
-	m.inputs[2].SetValue("root")
-	m.inputs[3].SetValue("22")
-	m.inputs[4].SetValue("")
-	m.inputs[5].SetValue("")
-	m.inputs[6].SetValue("staging")
+	m.inputs[fieldAlias].SetValue("api")
+	m.inputs[fieldHostname].SetValue("10.0.0.2")
+	m.inputs[fieldUser].SetValue("root")
+	m.inputs[fieldPort].SetValue("22")
+	m.inputs[fieldGroup].SetValue("staging")
 	m.groupCustom = true
 
 	if err := m.saveFromForm(); err == nil {

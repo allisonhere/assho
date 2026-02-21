@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/filepicker"
@@ -24,6 +25,19 @@ const (
 	stateFilePicker
 	stateGroupPrompt
 	stateHistory
+)
+
+// Form field indices (must match newFormInputs order).
+const (
+	fieldAlias     = 0
+	fieldHostname  = 1
+	fieldUser      = 2
+	fieldPort      = 3
+	fieldProxyJump = 4
+	fieldKeyFile   = 5
+	fieldPassword  = 6
+	fieldGroup     = 7
+	fieldCount     = 8
 )
 
 type model struct {
@@ -155,6 +169,46 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 	return items
 }
 
+// flattenAll is like flattenHosts but includes every host and container
+// regardless of group/host expansion state. Used to populate the list before
+// filter mode so that hosts inside collapsed groups are searchable.
+func flattenAll(groups []Group, hosts []Host) []list.Item {
+	var items []list.Item
+	for i := range hosts {
+		if hosts[i].GroupID != "" {
+			continue
+		}
+		h := hosts[i]
+		h.ListIndent = 0
+		items = append(items, h)
+		for j := range h.Containers {
+			c := h.Containers[j]
+			c.ParentID = h.ID
+			c.ListIndent = 1
+			items = append(items, c)
+		}
+	}
+	for i := range groups {
+		g := groups[i]
+		items = append(items, groupItem{Group: g})
+		for j := range hosts {
+			if hosts[j].GroupID != g.ID {
+				continue
+			}
+			h := hosts[j]
+			h.ListIndent = 1
+			items = append(items, h)
+			for k := range h.Containers {
+				c := h.Containers[k]
+				c.ParentID = h.ID
+				c.ListIndent = 2
+				items = append(items, c)
+			}
+		}
+	}
+	return items
+}
+
 func countContainers(hosts []Host) int {
 	count := 0
 	for _, h := range hosts {
@@ -164,7 +218,7 @@ func countContainers(hosts []Host) int {
 }
 
 func newFormInputs() []textinput.Model {
-	inputs := make([]textinput.Model, 8)
+	inputs := make([]textinput.Model, fieldCount)
 	labels := []string{"Alias", "Hostname", "User", "Port", "ProxyJump", "Key File", "Password", "Group"}
 	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "user@bastion:port", "optional key path", "", "optional group name"}
 	for i := range inputs {
@@ -175,7 +229,7 @@ func newFormInputs() []textinput.Model {
 		t.TextStyle = lipgloss.NewStyle().Foreground(colorText)
 		t.Placeholder = placeholders[i]
 		t.PlaceholderStyle = lipgloss.NewStyle().Foreground(colorDimText)
-		if i == 6 {
+		if i == fieldPassword {
 			t.EchoMode = textinput.EchoPassword
 			t.EchoCharacter = '•'
 			t.Placeholder = "••••••••"
@@ -325,27 +379,27 @@ func (m *model) resetForm() {
 		m.inputs[i].Blur()
 	}
 	// New host defaults.
-	m.inputs[3].SetValue("22")
-	m.inputs[3].CursorEnd()
-	m.inputs[0].Focus()
+	m.inputs[fieldPort].SetValue("22")
+	m.inputs[fieldPort].CursorEnd()
+	m.inputs[fieldAlias].Focus()
 }
 
 func (m *model) populateForm(h Host) {
 	m.resetForm()
-	m.inputs[0].SetValue(h.Alias)
-	m.inputs[0].CursorEnd()
-	m.inputs[1].SetValue(h.Hostname)
-	m.inputs[1].CursorEnd()
-	m.inputs[2].SetValue(h.User)
-	m.inputs[2].CursorEnd()
-	m.inputs[3].SetValue(h.Port)
-	m.inputs[3].CursorEnd()
-	m.inputs[4].SetValue(h.ProxyJump)
-	m.inputs[4].CursorEnd()
-	m.inputs[5].SetValue(h.IdentityFile)
-	m.inputs[5].CursorEnd()
-	m.inputs[7].SetValue(h.Password)
-	m.inputs[6].CursorEnd()
+	m.inputs[fieldAlias].SetValue(h.Alias)
+	m.inputs[fieldAlias].CursorEnd()
+	m.inputs[fieldHostname].SetValue(h.Hostname)
+	m.inputs[fieldHostname].CursorEnd()
+	m.inputs[fieldUser].SetValue(h.User)
+	m.inputs[fieldUser].CursorEnd()
+	m.inputs[fieldPort].SetValue(h.Port)
+	m.inputs[fieldPort].CursorEnd()
+	m.inputs[fieldProxyJump].SetValue(h.ProxyJump)
+	m.inputs[fieldProxyJump].CursorEnd()
+	m.inputs[fieldKeyFile].SetValue(h.IdentityFile)
+	m.inputs[fieldKeyFile].CursorEnd()
+	m.inputs[fieldPassword].SetValue(h.Password)
+	m.inputs[fieldPassword].CursorEnd()
 	groupName := ""
 	if h.GroupID != "" {
 		if idx := findGroupIndexByID(m.rawGroups, h.GroupID); idx != -1 {
@@ -353,15 +407,21 @@ func (m *model) populateForm(h Host) {
 		}
 	}
 	m.buildGroupOptions(groupName)
-	m.inputs[7].CursorEnd()
+	m.inputs[fieldGroup].CursorEnd()
 }
 
 func (m *model) saveFromForm() error {
 	snapshot := m.snapshot()
 
-	alias := strings.TrimSpace(m.inputs[0].Value())
+	alias := strings.TrimSpace(m.inputs[fieldAlias].Value())
 	if alias == "" {
 		return fmt.Errorf("alias is required")
+	}
+	if portStr := strings.TrimSpace(m.inputs[fieldPort].Value()); portStr != "" {
+		n, err := strconv.Atoi(portStr)
+		if err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("port must be a number between 1 and 65535")
+		}
 	}
 	for i := range m.rawHosts {
 		if strings.EqualFold(strings.TrimSpace(m.rawHosts[i].Alias), alias) {
@@ -374,14 +434,14 @@ func (m *model) saveFromForm() error {
 	newHost := Host{
 		ID:           "",
 		Alias:        alias,
-		Hostname:     m.inputs[1].Value(),
-		User:         m.inputs[2].Value(),
-		Port:         m.inputs[3].Value(),
-		ProxyJump:    m.inputs[4].Value(),
-		IdentityFile: m.inputs[5].Value(),
-		Password:     m.inputs[6].Value(),
+		Hostname:     m.inputs[fieldHostname].Value(),
+		User:         m.inputs[fieldUser].Value(),
+		Port:         m.inputs[fieldPort].Value(),
+		ProxyJump:    m.inputs[fieldProxyJump].Value(),
+		IdentityFile: m.inputs[fieldKeyFile].Value(),
+		Password:     m.inputs[fieldPassword].Value(),
 	}
-	groupName := strings.TrimSpace(m.inputs[7].Value())
+	groupName := strings.TrimSpace(m.inputs[fieldGroup].Value())
 	if !m.groupCustom {
 		if len(m.groupOptions) > 0 {
 			selected := m.groupOptions[m.groupIndex]
@@ -452,23 +512,25 @@ func (m *model) rebuildHistoryList() {
 
 	var items []list.Item
 	seen := map[string]bool{}
+	var pruned bool
+	var kept []HistoryEntry
 	for _, entry := range m.history {
+		h, exists := hostByID[entry.HostID]
+		if !exists {
+			// Host was deleted — drop it from stored history.
+			pruned = true
+			continue
+		}
+		kept = append(kept, entry)
 		if seen[entry.HostID] {
 			continue
 		}
 		seen[entry.HostID] = true
-		if h, ok := hostByID[entry.HostID]; ok {
-			items = append(items, *h)
-		} else {
-			// Host was deleted — show cached alias as a placeholder.
-			items = append(items, Host{
-				ID:    entry.HostID,
-				Alias: entry.Alias + " (deleted)",
-			})
-		}
-		if len(items) >= 5 {
-			break
-		}
+		items = append(items, *h)
+	}
+	if pruned {
+		m.history = kept
+		_ = m.save()
 	}
 	m.historyList.SetItems(items)
 }
@@ -484,20 +546,20 @@ func (m *model) buildGroupOptions(selectedName string) {
 
 	target := strings.TrimSpace(selectedName)
 	if target == "" {
-		m.inputs[7].SetValue("(none)")
+		m.inputs[fieldGroup].SetValue("(none)")
 		return
 	}
 	for i, opt := range m.groupOptions {
 		if strings.EqualFold(opt, target) {
 			m.groupIndex = i
-			m.inputs[7].SetValue(opt)
+			m.inputs[fieldGroup].SetValue(opt)
 			return
 		}
 	}
 	// Unknown group name: switch to custom mode with the provided name.
 	m.groupCustom = true
 	m.groupIndex = len(m.groupOptions) - 1
-	m.inputs[7].SetValue(target)
+	m.inputs[fieldGroup].SetValue(target)
 }
 
 func (m *model) applyGroupSelectionToInput() {
@@ -505,7 +567,7 @@ func (m *model) applyGroupSelectionToInput() {
 		return
 	}
 	if len(m.groupOptions) == 0 {
-		m.inputs[7].SetValue("(none)")
+		m.inputs[fieldGroup].SetValue("(none)")
 		return
 	}
 	if m.groupIndex < 0 {
@@ -514,7 +576,7 @@ func (m *model) applyGroupSelectionToInput() {
 	if m.groupIndex >= len(m.groupOptions) {
 		m.groupIndex = len(m.groupOptions) - 1
 	}
-	m.inputs[7].SetValue(m.groupOptions[m.groupIndex])
+	m.inputs[fieldGroup].SetValue(m.groupOptions[m.groupIndex])
 }
 
 func (m *model) deleteGroupByID(groupID string) error {

@@ -26,14 +26,11 @@ func (d hostDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 			icon = " ▼ "
 		}
 		title := "📁 " + g.Name
-		desc := "  group"
+		style := itemNormalTitle
 		if isSelected {
-			fmt.Fprintf(w, "%s", itemSelectedTitle.Render(strings.TrimLeft(icon+title, " ")))
-			fmt.Fprintf(w, "\n%s", itemSelectedDesc.Render(strings.TrimLeft(desc, " ")))
-		} else {
-			fmt.Fprintf(w, "%s", itemNormalTitle.Render(strings.TrimLeft(icon+title, " ")))
-			fmt.Fprintf(w, "\n%s", itemNormalDesc.Render(strings.TrimLeft(desc, " ")))
+			style = itemSelectedTitle
 		}
+		fmt.Fprintf(w, "%s\n", style.Render(strings.TrimLeft(icon+title, " ")))
 		return
 	}
 

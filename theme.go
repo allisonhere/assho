@@ -21,7 +21,6 @@ var (
 	colorSubtle    = lipgloss.Color("#374151") // Dark gray
 	colorText      = lipgloss.Color("#F9FAFB") // Near white
 	colorDimText   = lipgloss.Color("#9CA3AF") // Dim text
-	colorBorder    = lipgloss.Color("#4B5563") // Border gray
 	colorHighlight = lipgloss.Color("#A78BFA") // Light purple
 
 	// App chrome
@@ -32,15 +31,6 @@ var (
 			Background(colorPrimary).
 			Bold(true).
 			Padding(0, 1)
-
-	// Header
-	headerStyle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true)
-
-	headerAccentStyle = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Bold(true)
 
 	headerDimStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
@@ -103,19 +93,6 @@ var (
 
 	helpSepStyle = lipgloss.NewStyle().
 			Foreground(colorSubtle)
-
-	// Badge styles
-	badgeStyle = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(colorPrimary).
-			Padding(0, 1).
-			Bold(true)
-
-	containerBadgeStyle = lipgloss.NewStyle().
-				Foreground(colorText).
-				Background(lipgloss.Color("#0891B2")).
-				Padding(0, 1).
-				Bold(true)
 
 	// Test result styles
 	testSuccessStyle = lipgloss.NewStyle().
@@ -188,6 +165,7 @@ func renderListHelp(selected list.Item) string {
 			contextEntries = []string{
 				helpEntry("enter", "conn"),
 				helpEntry("e", "edit"),
+				helpEntry("c", "dup"),
 				helpEntry("d", "del"),
 				helpEntry("space", "expand"),
 				helpEntry("ctrl+d", "scan"),
@@ -208,6 +186,7 @@ func renderListHelp(selected list.Item) string {
 		helpEntry("/", "filt"),
 		helpEntry("h", "hist"),
 		helpEntry("i", "imp"),
+		helpEntry("ctrl+e", "exp"),
 		helpEntry("a", "about"),
 		helpEntry("q", "quit"),
 	}
@@ -236,6 +215,7 @@ func renderHistoryHelp() string {
 		helpEntry("e", "edit"),
 		helpEntry("h", "back"),
 		helpEntry("esc", "back"),
+		helpEntry("q", "quit"),
 	}
 	sep := helpSepStyle.Render(" | ")
 	return helpBarStyle.Render(strings.Join(entries, sep))
@@ -251,7 +231,3 @@ func renderFilePickerHelp() string {
 	return helpBarStyle.Render(strings.Join(entries, sep))
 }
 
-// statusMessageStyle kept as a func for backwards compat with filepicker hint
-func statusMessageStyle(s string) string {
-	return formHintStyle.Render(s)
-}

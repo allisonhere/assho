@@ -126,21 +126,21 @@ func (m model) View() string {
 		Background(colorSecondary).
 		Bold(true).
 		Padding(0, 1)
-	if m.focusIndex == 5 && m.keyPickFocus {
+	if m.focusIndex == fieldKeyFile && m.keyPickFocus {
 		pickStyle = pickStyle.Background(colorPrimary)
 	}
-	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.inputs[5].View(), "  ", pickStyle.Render("Pick")) + "\n")
-	formContent.WriteString(m.inputs[6].View() + "\n")
+	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
+	formContent.WriteString(m.inputs[fieldPassword].View() + "\n")
 
 	formContent.WriteString("\n")
 	formContent.WriteString(lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("  GROUPS") + "\n")
 	formContent.WriteString(divider + "\n")
 	if m.groupCustom {
-		formContent.WriteString(m.inputs[7].View() + "\n")
+		formContent.WriteString(m.inputs[fieldGroup].View() + "\n")
 	} else {
 		groupLabelStyle := lipgloss.NewStyle().Foreground(colorMuted)
 		groupValueStyle := lipgloss.NewStyle().Foreground(colorDimText)
-		if m.focusIndex == 7 {
+		if m.focusIndex == fieldGroup {
 			groupLabelStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
 			groupValueStyle = lipgloss.NewStyle().Foreground(colorText)
 		}
