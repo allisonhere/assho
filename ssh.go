@@ -15,6 +15,7 @@ type scanDockerMsg struct {
 	hostIndex  int
 	containers []Host
 	err        error
+	background bool // true for automatic refresh scans
 }
 
 type testConnectionMsg struct {
@@ -93,7 +94,7 @@ func testConnection(h Host) tea.Cmd {
 	}
 }
 
-func scanDockerContainers(h Host, index int) tea.Cmd {
+func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 	return func() tea.Msg {
 		// Run ssh command to get docker containers
 		// docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}"
@@ -136,9 +137,9 @@ func scanDockerContainers(h Host, index int) tea.Cmd {
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
-				return scanDockerMsg{hostIndex: index, err: fmt.Errorf("scan timed out")}
+				return scanDockerMsg{hostIndex: index, err: fmt.Errorf("scan timed out"), background: background}
 			}
-			return scanDockerMsg{hostIndex: index, err: fmt.Errorf("scan failed: %v", err)}
+			return scanDockerMsg{hostIndex: index, err: fmt.Errorf("scan failed: %v", err), background: background}
 		}
 
 		var containers []Host
@@ -162,7 +163,7 @@ func scanDockerContainers(h Host, index int) tea.Cmd {
 				})
 			}
 		}
-		return scanDockerMsg{hostIndex: index, containers: containers}
+		return scanDockerMsg{hostIndex: index, containers: containers, background: background}
 	}
 }
 

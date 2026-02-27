@@ -24,6 +24,14 @@ func headerTick() tea.Cmd {
 	})
 }
 
+type dockerRefreshTickMsg struct{}
+
+func dockerRefreshTick() tea.Cmd {
+	return tea.Tick(30*time.Second, func(_ time.Time) tea.Msg {
+		return dockerRefreshTickMsg{}
+	})
+}
+
 func (m model) View() string {
 	if m.quitting {
 		return ""
@@ -263,24 +271,27 @@ func renderLogo(frame int) string {
 func renderAboutModal(frame int) string {
 	var b strings.Builder
 
+	const modalBg = lipgloss.Color("#0D0D0D")
+
 	b.WriteString(renderLogo(frame))
 
 	// Tagline
-	tagline := lipgloss.NewStyle().Foreground(colorDimText).Italic(true).
+	tagline := lipgloss.NewStyle().Foreground(colorDimText).Italic(true).Background(modalBg).
 		Render("          Another SSH Host Organizer")
 	b.WriteString("\n" + tagline + "\n")
 
 	// Divider
-	divider := lipgloss.NewStyle().Foreground(colorSubtle).Render(strings.Repeat("━", 44))
+	divider := lipgloss.NewStyle().Foreground(colorSubtle).Background(modalBg).Render(strings.Repeat("━", 44))
 	b.WriteString("\n" + divider + "\n\n")
 
 	// Info rows
-	labelStyle := lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Width(14).Align(lipgloss.Right)
-	valueStyle := lipgloss.NewStyle().Foreground(colorText)
-	mutedStyle := lipgloss.NewStyle().Foreground(colorDimText)
+	sp := lipgloss.NewStyle().Background(modalBg)
+	labelStyle := lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Width(14).Align(lipgloss.Right).Background(modalBg)
+	valueStyle := lipgloss.NewStyle().Foreground(colorText).Background(modalBg)
+	mutedStyle := lipgloss.NewStyle().Foreground(colorDimText).Background(modalBg)
 
 	row := func(label, value string) string {
-		return labelStyle.Render(label) + "  " + valueStyle.Render(value) + "\n"
+		return labelStyle.Render(label) + sp.Render("  ") + valueStyle.Render(value) + "\n"
 	}
 
 	b.WriteString(row("Version", version))
@@ -288,12 +299,12 @@ func renderAboutModal(frame int) string {
 	b.WriteString(row("License", "MIT"))
 	b.WriteString("\n")
 
-	linkStyle := lipgloss.NewStyle().Foreground(colorHighlight).Underline(true)
-	b.WriteString(labelStyle.Render("Source") + "  " + linkStyle.Render("github.com/allisonhere/assho") + "\n")
+	linkStyle := lipgloss.NewStyle().Foreground(colorHighlight).Underline(true).Background(modalBg)
+	b.WriteString(labelStyle.Render("Source") + sp.Render("  ") + linkStyle.Render("github.com/allisonhere/assho") + "\n")
 	b.WriteString("\n" + divider + "\n\n")
 
 	// Built with
-	b.WriteString(mutedStyle.Render("Built with") + " ")
+	b.WriteString(mutedStyle.Render("Built with") + sp.Render(" "))
 	techs := []struct {
 		name  string
 		color lipgloss.Color
@@ -303,14 +314,14 @@ func renderAboutModal(frame int) string {
 		{"Lip Gloss", lipgloss.Color("#F472B6")},
 	}
 	for i, t := range techs {
-		b.WriteString(lipgloss.NewStyle().Foreground(t.color).Bold(true).Render(t.name))
+		b.WriteString(lipgloss.NewStyle().Foreground(t.color).Bold(true).Background(modalBg).Render(t.name))
 		if i < len(techs)-1 {
 			b.WriteString(mutedStyle.Render(" · "))
 		}
 	}
 	b.WriteString("\n\n")
 
-	help := helpKeyStyle.Render("esc") + " " + helpDescStyle.Render("close")
+	help := helpKeyStyle.Background(modalBg).Render("esc") + sp.Render(" ") + helpDescStyle.Background(modalBg).Render("close")
 	b.WriteString(help)
 
 	// Wrap in a bordered box
@@ -318,7 +329,7 @@ func renderAboutModal(frame int) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorPrimary).
 		Padding(1, 3).
-		Background(lipgloss.Color("#0D0D0D")).
+		Background(modalBg).
 		Render(b.String())
 
 	return modalBox

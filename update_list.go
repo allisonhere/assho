@@ -115,7 +115,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						if len(h.Containers) == 0 {
 							m.scanning = true
 							m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
-							return m, scanDockerContainers(m.rawHosts[idx], idx)
+							return m, scanDockerContainers(m.rawHosts[idx], idx, false)
 						}
 						m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
 					}
@@ -151,7 +151,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := findHostIndexByID(m.rawHosts, i.ID)
 			if idx != -1 {
 				m.scanning = true
-				return m, scanDockerContainers(m.rawHosts[idx], idx)
+				return m, scanDockerContainers(m.rawHosts[idx], idx, false)
 			}
 		}
 	case "e":

@@ -10,7 +10,6 @@ import (
 
 func TestShouldPersistPasswordVariants(t *testing.T) {
 	t.Setenv("ASSHO_STORE_PASSWORD", "")
-	t.Setenv("ASSHI_STORE_PASSWORD", "")
 	if !shouldPersistPassword() {
 		t.Fatal("expected default to persist password")
 	}
@@ -25,16 +24,14 @@ func TestShouldPersistPasswordVariants(t *testing.T) {
 		t.Fatal("expected ASSHO_STORE_PASSWORD=false to disable persistence")
 	}
 
-	t.Setenv("ASSHO_STORE_PASSWORD", "")
-	t.Setenv("ASSHI_STORE_PASSWORD", "no")
+	t.Setenv("ASSHO_STORE_PASSWORD", "no")
 	if shouldPersistPassword() {
-		t.Fatal("expected legacy ASSHI_STORE_PASSWORD=no to disable persistence")
+		t.Fatal("expected ASSHO_STORE_PASSWORD=no to disable persistence")
 	}
 }
 
 func TestAllowInsecureTestVariants(t *testing.T) {
 	t.Setenv("ASSHO_INSECURE_TEST", "")
-	t.Setenv("ASSHI_INSECURE_TEST", "")
 	if allowInsecureTest() {
 		t.Fatal("expected default secure mode")
 	}
@@ -44,10 +41,9 @@ func TestAllowInsecureTestVariants(t *testing.T) {
 		t.Fatal("expected ASSHO_INSECURE_TEST=1 to enable insecure mode")
 	}
 
-	t.Setenv("ASSHO_INSECURE_TEST", "")
-	t.Setenv("ASSHI_INSECURE_TEST", "yes")
+	t.Setenv("ASSHO_INSECURE_TEST", "yes")
 	if !allowInsecureTest() {
-		t.Fatal("expected legacy ASSHI_INSECURE_TEST=yes to enable insecure mode")
+		t.Fatal("expected ASSHO_INSECURE_TEST=yes to enable insecure mode")
 	}
 }
 

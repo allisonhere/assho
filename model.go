@@ -309,7 +309,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, headerTick())
+	return tea.Batch(m.spinner.Tick, headerTick(), dockerRefreshTick())
 }
 
 // --- Finder Helpers ---

@@ -7,57 +7,6 @@ import (
 	"testing"
 )
 
-func TestLoadConfigLegacyHostsOnly(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfgPath := filepath.Join(tmp, ".config", "asshi", "hosts.json")
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	legacy := []Host{{ID: "h1", Alias: "legacy", Hostname: "1.2.3.4", User: "root", Port: "22"}}
-	b, _ := json.Marshal(legacy)
-	if err := os.WriteFile(cfgPath, b, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	groups, hosts, _, err := loadConfig()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(groups) != 0 {
-		t.Fatalf("expected no groups, got %d", len(groups))
-	}
-	if len(hosts) != 1 || hosts[0].Alias != "legacy" {
-		t.Fatalf("unexpected hosts payload: %+v", hosts)
-	}
-}
-
-func TestLoadConfigNewPathHostsOnly(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfgPath := filepath.Join(tmp, ".config", "assho", "hosts.json")
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	legacy := []Host{{ID: "h1", Alias: "newpath", Hostname: "1.2.3.4", User: "root", Port: "22"}}
-	b, _ := json.Marshal(legacy)
-	if err := os.WriteFile(cfgPath, b, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	groups, hosts, _, err := loadConfig()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(groups) != 0 {
-		t.Fatalf("expected no groups, got %d", len(groups))
-	}
-	if len(hosts) != 1 || hosts[0].Alias != "newpath" {
-		t.Fatalf("unexpected hosts payload: %+v", hosts)
-	}
-}
 
 func TestSaveConfigWritesVersion(t *testing.T) {
 	tmp := t.TempDir()
@@ -95,38 +44,6 @@ func TestSaveConfigWritesVersion(t *testing.T) {
 	}
 }
 
-func TestLoadConfigMigratesLegacyPathToNewPath(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-	t.Setenv("ASSHO_STORE_PASSWORD", "0")
-
-	legacyPath := filepath.Join(tmp, ".config", "asshi", "hosts.json")
-	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	legacyHosts := []Host{{ID: "h1", Alias: "legacy", Hostname: "1.2.3.4", User: "root", Port: "22"}}
-	b, _ := json.Marshal(legacyHosts)
-	if err := os.WriteFile(legacyPath, b, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, hosts, _, err := loadConfig()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(hosts) != 1 || hosts[0].Alias != "legacy" {
-		t.Fatalf("unexpected hosts payload: %+v", hosts)
-	}
-
-	newPath := filepath.Join(tmp, ".config", "assho", "hosts.json")
-	info, err := os.Stat(newPath)
-	if err != nil {
-		t.Fatalf("expected migrated config at new path, got err: %v", err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("expected migrated permissions 0600, got %04o", info.Mode().Perm())
-	}
-}
 
 func TestFlattenHostsIndentation(t *testing.T) {
 	groups := []Group{{ID: "g1", Name: "prod", Expanded: true}}

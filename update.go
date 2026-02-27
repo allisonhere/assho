@@ -29,10 +29,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.testing = false
 		return m, nil
 	case scanDockerMsg:
-		m.scanning = false
+		if !msg.background {
+			m.scanning = false
+		}
 		if msg.err != nil {
-			m.statusMessage = fmt.Sprintf("Scan failed: %v", msg.err)
-			m.statusIsError = true
+			if !msg.background {
+				m.statusMessage = fmt.Sprintf("Scan failed: %v", msg.err)
+				m.statusIsError = true
+			}
 		} else {
 			if msg.hostIndex >= 0 && msg.hostIndex < len(m.rawHosts) {
 				m.rawHosts[msg.hostIndex].Containers = msg.containers
@@ -41,6 +45,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case dockerRefreshTickMsg:
+		var cmds []tea.Cmd
+		cmds = append(cmds, dockerRefreshTick())
+		for idx, h := range m.rawHosts {
+			if h.Expanded && !h.IsContainer {
+				cmds = append(cmds, scanDockerContainers(m.rawHosts[idx], idx, true))
+			}
+		}
+		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height

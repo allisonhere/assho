@@ -84,20 +84,8 @@ func getConfigPath() string {
 	return filepath.Join(home, ".config", "assho", "hosts.json")
 }
 
-func getLegacyConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "hosts.json"
-	}
-	return filepath.Join(home, ".config", "asshi", "hosts.json")
-}
-
 func shouldPersistPassword() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ASSHO_STORE_PASSWORD")))
-	if value == "" {
-		// Backward compatibility with old env name.
-		value = strings.ToLower(strings.TrimSpace(os.Getenv("ASSHI_STORE_PASSWORD")))
-	}
 	if value == "" {
 		return true
 	}
@@ -106,10 +94,6 @@ func shouldPersistPassword() bool {
 
 func allowInsecureTest() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ASSHO_INSECURE_TEST")))
-	if value == "" {
-		// Backward compatibility with old env name.
-		value = strings.ToLower(strings.TrimSpace(os.Getenv("ASSHI_INSECURE_TEST")))
-	}
 	return value == "1" || value == "true" || value == "yes"
 }
 
@@ -314,28 +298,15 @@ type configFile struct {
 
 func loadConfig() ([]Group, []Host, []HistoryEntry, error) {
 	path := getConfigPath()
-	loadedFromLegacy := false
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			legacyPath := getLegacyConfigPath()
-			if legacyPath != path {
-				if legacyFile, legacyErr := os.Open(legacyPath); legacyErr == nil {
-					f = legacyFile
-					loadedFromLegacy = true
-				} else if !os.IsNotExist(legacyErr) {
-					return []Group{}, []Host{}, nil, legacyErr
-				}
-			}
-			if f == nil {
-				// Return default/example data if no config exists
-				return []Group{}, []Host{
-					{ID: newHostID(), Alias: "Localhost", Hostname: "127.0.0.1", User: "root", Port: "22"},
-				}, nil, nil
-			}
-		} else {
-			return []Group{}, []Host{}, nil, err
+			// Return default/example data if no config exists.
+			return []Group{}, []Host{
+				{ID: newHostID(), Alias: "Localhost", Hostname: "127.0.0.1", User: "root", Port: "22"},
+			}, nil, nil
 		}
+		return []Group{}, []Host{}, nil, err
 	}
 	defer f.Close()
 
@@ -345,31 +316,10 @@ func loadConfig() ([]Group, []Host, []HistoryEntry, error) {
 	}
 
 	var cfg configFile
-	if err := json.Unmarshal(bytes, &cfg); err == nil {
-		if cfg.Version > 0 || len(cfg.Hosts) > 0 || len(cfg.Groups) > 0 {
-			if cfg.Version == 0 {
-				cfg.Version = 1
-			}
-			if loadedFromLegacy {
-				if err := saveConfig(cfg.Groups, cfg.Hosts, cfg.History); err != nil {
-					return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, fmt.Errorf("migrated legacy config but failed to persist new path: %w", err)
-				}
-			}
-			return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, nil
-		}
+	if err := json.Unmarshal(bytes, &cfg); err != nil {
+		return []Group{}, []Host{}, nil, fmt.Errorf("invalid config format")
 	}
-
-	// Backward compatibility with old hosts-only format.
-	var hosts []Host
-	if err := json.Unmarshal(bytes, &hosts); err == nil {
-		if loadedFromLegacy {
-			if err := saveConfig([]Group{}, hosts, nil); err != nil {
-				return []Group{}, hydrateHostPasswords(hosts), nil, fmt.Errorf("migrated legacy hosts but failed to persist new path: %w", err)
-			}
-		}
-		return []Group{}, hydrateHostPasswords(hosts), nil, nil
-	}
-	return []Group{}, []Host{}, nil, fmt.Errorf("invalid config format")
+	return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, nil
 }
 
 func saveConfig(groups []Group, hosts []Host, history []HistoryEntry) error {

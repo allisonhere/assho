@@ -24,7 +24,7 @@ Stop typing `ssh root@192.168.1.47 -p 2222 -i ~/.ssh/id_rsa` from memory. Assho 
 - **Instant connect** — select a host and hit Enter. SSH hands off immediately; the TUI exits cleanly.
 - **Connection history** — press `h` to see your recently connected hosts and reconnect instantly.
 - **ProxyJump support** — specify a bastion/jump host per server; it's passed straight to SSH's `-J` flag.
-- **Docker container access** — expand any host to discover and shell into its running containers.
+- **Docker container access** — expand any host to discover and shell into its running containers. Container lists auto-refresh every 30 seconds; press `Ctrl+D` to force an immediate re-scan.
 - **Host groups** — organize servers into collapsible, reorderable groups (prod, staging, homelab, etc.).
 - **Duplicate host** — clone any host with `c` and tweak the copy, great for similar servers.
 - **SSH config import/export** — pull hosts in from `~/.ssh/config` with `i`, push them back out with `Ctrl+E`.
@@ -79,7 +79,7 @@ assho --version  # print version
 | `Space` | Expand/collapse host containers |
 | `→` | Expand host or group (auto-scans Docker if empty) |
 | `←` | Collapse host or group |
-| `Ctrl+D` | Force-scan Docker containers |
+| `Ctrl+D` | Force re-scan Docker containers immediately |
 | `/` | Filter / search |
 | `h` | Recent connection history |
 | `i` | Import hosts from `~/.ssh/config` |
