@@ -267,18 +267,6 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusIsError = false
 		m.statusVersion++
 		return m, statusClearCmd(m.statusVersion)
-	case "ctrl+e":
-		exported, skipped, err := exportSSHConfig(m.rawHosts)
-		if err != nil {
-			m.statusMessage = err.Error()
-			m.statusIsError = true
-			m.statusVersion++
-			return m, statusClearCmd(m.statusVersion)
-		}
-		m.statusMessage = fmt.Sprintf("Exported %d hosts to ~/.ssh/config (%d skipped)", exported, skipped)
-		m.statusIsError = false
-		m.statusVersion++
-		return m, statusClearCmd(m.statusVersion)
 	case "h":
 		m.rebuildHistoryList()
 		m.state = stateHistory

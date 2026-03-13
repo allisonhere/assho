@@ -187,10 +187,10 @@ func renderListHelp(selected list.Item) string {
 
 	baseEntries := []string{
 		helpEntry("n", "new"),
+		helpEntry("g", "group"),
 		helpEntry("/", "filt"),
 		helpEntry("h", "hist"),
 		helpEntry("i", "imp"),
-		helpEntry("ctrl+e", "exp"),
 		helpEntry("a", "about"),
 		helpEntry("q", "quit"),
 	}
