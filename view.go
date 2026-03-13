@@ -65,7 +65,6 @@ func (m model) View() string {
 			content += "\n" + testFailStyle.Render(" Config warning: "+m.err.Error())
 		}
 		help := "\n" + renderListHelp(m.list.SelectedItem())
-		bg := appStyle.Render(content + help)
 
 		if m.aboutOpen {
 			modal := renderAboutModal(m.aboutFrame)
@@ -76,12 +75,10 @@ func (m model) View() string {
 				lipgloss.WithWhitespaceChars(" "),
 				lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
 			)
-			// Dim the background by placing the modal on top
-			_ = bg
 			return overlay
 		}
 
-		return bg
+		return appStyle.Render(content + help)
 	}
 	if m.state == stateFilePicker {
 		title := formTitleStyle.Render("📂 Select Identity File")

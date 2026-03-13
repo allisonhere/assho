@@ -39,12 +39,12 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "ctrl+t":
 		h := Host{
-			Hostname:     m.inputs[1].Value(),
-			User:         m.inputs[2].Value(),
-			Port:         m.inputs[3].Value(),
-			ProxyJump:    m.inputs[4].Value(),
-			IdentityFile: m.inputs[5].Value(),
-			Password:     m.inputs[6].Value(),
+			Hostname:     m.inputs[fieldHostname].Value(),
+			User:         m.inputs[fieldUser].Value(),
+			Port:         m.inputs[fieldPort].Value(),
+			ProxyJump:    m.inputs[fieldProxyJump].Value(),
+			IdentityFile: m.inputs[fieldKeyFile].Value(),
+			Password:     m.inputs[fieldPassword].Value(),
 		}
 		m.testStatus = ""
 		m.testing = true

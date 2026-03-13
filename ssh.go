@@ -97,8 +97,8 @@ func testConnection(h Host) tea.Cmd {
 func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 	return func() tea.Msg {
 		// Run ssh command to get docker containers
-		// docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}"
-		cmdStr := `docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}"`
+		// docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}"
+		cmdStr := `docker ps --format "{{.ID}}` + "\t" + `{{.Names}}` + "\t" + `{{.Image}}"`
 
 		args := []string{
 			"-o", "BatchMode=yes",
@@ -113,6 +113,9 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 		}
 		if h.IdentityFile != "" {
 			args = append([]string{"-i", expandPath(h.IdentityFile)}, args...)
+		}
+		if h.ProxyJump != "" {
+			args = append([]string{"-J", h.ProxyJump}, args...)
 		}
 		// If password exists, use sshpass?
 		// For simplicity, we assume key-based or agent for scanning to avoid hanging
@@ -148,7 +151,7 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			parts := strings.Split(line, "|")
+			parts := strings.Split(line, "\t")
 			if len(parts) >= 2 {
 				id := parts[0]
 				name := parts[1]
