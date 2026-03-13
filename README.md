@@ -22,12 +22,16 @@ Stop typing `ssh root@192.168.1.47 -p 2222 -i ~/.ssh/id_rsa` from memory. Assho 
 ## Features
 
 - **Instant connect** — select a host and hit Enter. SSH hands off immediately; the TUI exits cleanly.
-- **Connection history** — press `h` to see your recently connected hosts and reconnect instantly.
+- **Connection history** — press `h` to see your recently connected hosts and reconnect instantly. Last-connected time is shown inline on each host.
 - **ProxyJump support** — specify a bastion/jump host per server; it's passed straight to SSH's `-J` flag.
+- **Port forwarding** — configure a local tunnel per host (e.g. `5432:localhost:5432`); passed to SSH's `-L` flag automatically.
 - **Docker container access** — expand any host to discover and shell into its running containers. Container lists auto-refresh every 30 seconds; press `Ctrl+D` to force an immediate re-scan.
 - **Host groups** — organize servers into collapsible, reorderable groups (prod, staging, homelab, etc.).
+- **Pinned hosts** — pin frequently used hosts with `p`; they float to the top of the list under a ★ Pinned header.
+- **Notes** — attach a free-text note to any host (shown truncated in the list).
 - **Duplicate host** — clone any host with `c` and tweak the copy, great for similar servers.
-- **SSH config import/export** — pull hosts in from `~/.ssh/config` with `i`, push them back out with `Ctrl+E`.
+- **SSH config import** — pull hosts in from `~/.ssh/config` with `i`.
+- **Non-interactive CLI** — connect, test, or list hosts without launching the TUI (see [CLI Usage](#cli-usage)).
 - **Fuzzy search** — type `/` and filter across all hosts and groups by alias or hostname.
 - **Connection testing** — verify connectivity before saving with `Ctrl+T`.
 - **Identity file picker** — browse and select SSH keys with a built-in file picker.
@@ -61,8 +65,16 @@ sudo make install
 ## Usage
 
 ```bash
-assho            # launch the TUI
-assho --version  # print version
+assho                    # launch the TUI
+assho --version          # print version
+```
+
+### CLI Usage
+
+```bash
+assho list               # print all hosts as a table
+assho connect <alias>    # connect directly, no TUI
+assho test <alias>       # test connectivity, exits 0/1
 ```
 
 ### Keybindings
@@ -76,6 +88,7 @@ assho --version  # print version
 | `e` | Edit selected host |
 | `c` | Duplicate selected host |
 | `d` | Delete (press twice to confirm) |
+| `p` | Pin / unpin host |
 | `Space` | Expand/collapse host containers |
 | `→` | Expand host or group (auto-scans Docker if empty) |
 | `←` | Collapse host or group |
@@ -83,7 +96,6 @@ assho --version  # print version
 | `/` | Filter / search |
 | `h` | Recent connection history |
 | `i` | Import hosts from `~/.ssh/config` |
-| `Ctrl+E` | Export hosts to `~/.ssh/config` |
 | `Shift+↑` / `Shift+↓` | Reorder hosts / groups |
 | `g` | Create group |
 | `r` | Rename selected group |
@@ -120,8 +132,11 @@ assho --version  # print version
 | User | SSH username |
 | Port | SSH port (default: 22) |
 | ProxyJump | Jump host in `[user@]host[:port]` format, passed to SSH's `-J` |
+| LocalFwd | Port tunnel in `local:host:remote` format, passed to SSH's `-L` |
 | Key File | Path to identity file; use the `Pick` button to browse |
+| Notes | Free-text note shown in the host list |
 | Password | Stored in your OS keychain, not in the config file |
+| Fwd. Agent | Set to `yes` to enable SSH agent forwarding (`-A`) |
 | Group | Assign to an existing group or create a new one |
 
 ## Configuration
