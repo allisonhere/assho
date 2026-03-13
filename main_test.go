@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-
 func TestSaveConfigWritesVersion(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
@@ -43,7 +42,6 @@ func TestSaveConfigWritesVersion(t *testing.T) {
 		t.Fatalf("expected permissions 0600, got %04o", info.Mode().Perm())
 	}
 }
-
 
 func TestFlattenHostsIndentation(t *testing.T) {
 	groups := []Group{{ID: "g1", Name: "prod", Expanded: true}}

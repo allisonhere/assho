@@ -230,4 +230,3 @@ func renderFilePickerHelp() string {
 	sep := helpSepStyle.Render(" | ")
 	return helpBarStyle.Render(strings.Join(entries, sep))
 }
-
