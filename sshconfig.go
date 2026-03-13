@@ -9,7 +9,10 @@ import (
 )
 
 // parseSSHConfig reads an SSH config file and extracts Host blocks into []Host.
+
+// parseSSHConfig reads an SSH config file and extracts Host blocks into []Host.
 // It skips wildcard patterns (e.g. Host *, Host 192.168.*) and Match blocks.
+// Include directives are followed recursively.
 func parseSSHConfig(path string) ([]Host, error) {
 	path = expandPath(path)
 	f, err := os.Open(path)
@@ -28,6 +31,7 @@ func parseSSHConfig(path string) ([]Host, error) {
 
 	var blocks []hostBlock
 	var current *hostBlock
+	var included []Host // hosts resolved from Include directives
 	inMatch := false
 
 	scanner := bufio.NewScanner(f)
@@ -40,6 +44,31 @@ func parseSSHConfig(path string) ([]Host, error) {
 		// Split into keyword and argument(s).
 		keyword, args := splitDirective(line)
 		keyword = strings.ToLower(keyword)
+
+		if keyword == "include" {
+			// Flush the current host block before following the include.
+			if current != nil {
+				blocks = append(blocks, *current)
+				current = nil
+			}
+			inMatch = false
+			// Resolve path: relative paths are relative to ~/.ssh/.
+			pattern := expandPath(args)
+			if !filepath.IsAbs(pattern) {
+				home, homeErr := os.UserHomeDir()
+				if homeErr == nil {
+					pattern = filepath.Join(home, ".ssh", pattern)
+				}
+			}
+			matches, _ := filepath.Glob(pattern)
+			for _, p := range matches {
+				sub, subErr := parseSSHConfig(p)
+				if subErr == nil {
+					included = append(included, sub...)
+				}
+			}
+			continue
+		}
 
 		if keyword == "match" {
 			// End any current host block, ignore match blocks.
@@ -119,7 +148,7 @@ func parseSSHConfig(path string) ([]Host, error) {
 			hosts = append(hosts, h)
 		}
 	}
-	return hosts, nil
+	return append(included, hosts...), nil
 }
 
 // importSSHConfig parses ~/.ssh/config and returns only hosts whose alias
@@ -168,7 +197,10 @@ func exportSSHConfig(hosts []Host) (exported int, skipped int, err error) {
 	configPath := filepath.Join(sshDir, "config")
 
 	// Build set of aliases already present in the SSH config.
-	existingContent, _ := os.ReadFile(configPath)
+	existingContent, readErr := os.ReadFile(configPath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return 0, 0, fmt.Errorf("cannot read SSH config: %w", readErr)
+	}
 	existingAliases := map[string]bool{}
 	for _, line := range strings.Split(string(existingContent), "\n") {
 		line = strings.TrimSpace(line)

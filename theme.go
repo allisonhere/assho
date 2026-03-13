@@ -61,8 +61,11 @@ var (
 	formBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorPrimary).
-			Padding(1, 2).
-			Width(60)
+			Padding(1, 2)
+
+	formSectionStyle = lipgloss.NewStyle().
+				Foreground(colorSecondary).
+				Bold(true)
 
 	formTitleStyle = lipgloss.NewStyle().
 			Foreground(colorText).
@@ -167,6 +170,7 @@ func renderListHelp(selected list.Item) string {
 				helpEntry("e", "edit"),
 				helpEntry("c", "dup"),
 				helpEntry("d", "del"),
+				helpEntry("p", "pin"),
 				helpEntry("space", "expand"),
 				helpEntry("ctrl+d", "scan"),
 				helpEntry("⇧↑↓", "move"),
@@ -191,18 +195,22 @@ func renderListHelp(selected list.Item) string {
 		helpEntry("q", "quit"),
 	}
 
-	entries := append(contextEntries, baseEntries...)
 	sep := helpSepStyle.Render(" | ")
-	return helpBarStyle.Render(strings.Join(entries, sep))
+	if len(contextEntries) == 0 {
+		return helpBarStyle.Render(strings.Join(baseEntries, sep))
+	}
+	line1 := helpBarStyle.Render(strings.Join(contextEntries, sep))
+	line2 := helpBarStyle.Render(strings.Join(baseEntries, sep))
+	return line1 + "\n" + line2
 }
 
 func renderFormHelp() string {
 	entries := []string{
 		helpEntry("tab", "next"),
 		helpEntry("enter", "save"),
-		helpEntry("ctrl+t", "test"),
-		helpEntry("enter", "pick file"),
-		helpEntry("arrows", "group"),
+		helpEntry("ctrl+t", "test conn"),
+		helpEntry("[pick]", "key file"),
+		helpEntry("←→", "group"),
 		helpEntry("esc", "cancel"),
 	}
 	sep := helpSepStyle.Render(" | ")

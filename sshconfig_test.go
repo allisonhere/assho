@@ -263,6 +263,58 @@ func TestExportSSHConfigZeroExported(t *testing.T) {
 	}
 }
 
+func TestExportSSHConfigErrorOnUnreadableConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	sshDir := filepath.Join(home, ".ssh")
+	_ = os.MkdirAll(sshDir, 0700)
+	configPath := filepath.Join(sshDir, "config")
+	// Create config as an unreadable file (directory tricks won't work in all OSes;
+	// use a directory in place of the file to trigger a read error).
+	_ = os.MkdirAll(configPath, 0700)
+
+	hosts := []Host{{ID: "h1", Alias: "web", Hostname: "1.2.3.4"}}
+	_, _, err := exportSSHConfig(hosts)
+	if err == nil {
+		t.Fatal("expected error when SSH config cannot be read, got nil")
+	}
+}
+
+func TestParseSSHConfigInclude(t *testing.T) {
+	dir := t.TempDir()
+
+	included := filepath.Join(dir, "included")
+	includedContent := "Host included-host\n    HostName 5.5.5.5\n"
+	if err := os.WriteFile(included, []byte(includedContent), 0600); err != nil {
+		t.Fatalf("failed to write included config: %v", err)
+	}
+
+	mainContent := "Include " + included + "\n\nHost main-host\n    HostName 1.1.1.1\n"
+	mainPath := filepath.Join(dir, "config")
+	if err := os.WriteFile(mainPath, []byte(mainContent), 0600); err != nil {
+		t.Fatalf("failed to write main config: %v", err)
+	}
+
+	hosts, err := parseSSHConfig(mainPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(hosts) != 2 {
+		t.Fatalf("expected 2 hosts (1 included + 1 main), got %d: %v", len(hosts), hosts)
+	}
+	aliases := map[string]bool{}
+	for _, h := range hosts {
+		aliases[h.Alias] = true
+	}
+	if !aliases["included-host"] {
+		t.Error("expected included-host to be parsed from included file")
+	}
+	if !aliases["main-host"] {
+		t.Error("expected main-host to be parsed from main file")
+	}
+}
+
 func TestImportSSHConfigDeduplicates(t *testing.T) {
 	config := `
 Host existing-host

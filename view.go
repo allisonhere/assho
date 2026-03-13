@@ -109,22 +109,37 @@ func (m model) View() string {
 		formTitle = formTitleStyle.Render("✎ Edit Session")
 	}
 
-	divider := formDividerStyle.Render(strings.Repeat("─", 40))
+	formWidth := 60
+	if m.width > 0 {
+		available := m.width - 8 // subtract appStyle padding + border
+		if available < 40 {
+			available = 40
+		}
+		if available < formWidth {
+			formWidth = available
+		}
+	}
+	dividerWidth := formWidth - 4
+	if dividerWidth < 8 {
+		dividerWidth = 8
+	}
+	divider := formDividerStyle.Render(strings.Repeat("─", dividerWidth))
+	activeFormBoxStyle := formBoxStyle.Width(formWidth)
 
 	// Build form content
 	var formContent strings.Builder
 	formContent.WriteString(formTitle + "\n\n")
 
 	// Connection section
-	formContent.WriteString(lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("  CONNECTION") + "\n")
+	formContent.WriteString(formSectionStyle.Render("  CONNECTION") + "\n")
 	formContent.WriteString(divider + "\n")
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 6; i++ {
 		formContent.WriteString(m.inputs[i].View() + "\n")
 	}
 
 	formContent.WriteString("\n")
 	// Auth section
-	formContent.WriteString(lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("  AUTHENTICATION") + "\n")
+	formContent.WriteString(formSectionStyle.Render("  AUTHENTICATION") + "\n")
 	formContent.WriteString(divider + "\n")
 	pickStyle := lipgloss.NewStyle().
 		Foreground(colorText).
@@ -135,10 +150,12 @@ func (m model) View() string {
 		pickStyle = pickStyle.Background(colorPrimary)
 	}
 	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
+	formContent.WriteString(m.inputs[fieldNotes].View() + "\n")
 	formContent.WriteString(m.inputs[fieldPassword].View() + "\n")
+	formContent.WriteString(m.inputs[fieldForwardAgent].View() + "\n")
 
 	formContent.WriteString("\n")
-	formContent.WriteString(lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("  GROUPS") + "\n")
+	formContent.WriteString(formSectionStyle.Render("  GROUPS") + "\n")
 	formContent.WriteString(divider + "\n")
 	if m.groupCustom {
 		formContent.WriteString(m.inputs[fieldGroup].View() + "\n")
@@ -193,7 +210,7 @@ func (m model) View() string {
 		formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.formError))
 	}
 
-	form := formBoxStyle.Render(formContent.String())
+	form := activeFormBoxStyle.Render(formContent.String())
 	help := "\n" + renderFormHelp()
 
 	return appStyle.Render(form + help)

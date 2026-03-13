@@ -27,6 +27,10 @@ type Host struct {
 	Password     string `json:"password,omitempty"`
 	PasswordRef  string `json:"password_ref,omitempty"`
 	ProxyJump    string `json:"proxy_jump,omitempty"`
+	LocalForward string `json:"local_forward,omitempty"`
+	ForwardAgent bool   `json:"forward_agent,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+	Pinned       bool   `json:"pinned,omitempty"`
 	GroupID      string `json:"group_id,omitempty"`
 
 	// Docker Support
@@ -45,6 +49,7 @@ type Group struct {
 
 type groupItem struct {
 	Group
+	HostCount int
 }
 
 func (g groupItem) FilterValue() string { return g.Name }
@@ -262,29 +267,37 @@ func ensureHostIDs(hosts []Host) ([]Host, bool) {
 	return hosts, changed
 }
 
+func newGroupID() string { return newHostID() }
+
 func ensureGroupIDs(groups []Group) ([]Group, bool) {
 	changed := false
 	for i := range groups {
 		if groups[i].ID == "" {
-			groups[i].ID = newHostID()
+			groups[i].ID = newGroupID()
 			changed = true
 		}
 	}
 	return groups, changed
 }
 
-func hydrateHostPasswords(hosts []Host) []Host {
+func hydrateHostPasswords(hosts []Host) ([]Host, []string) {
+	var warnings []string
 	for i := range hosts {
 		if hosts[i].Password == "" && hosts[i].PasswordRef != "" {
-			if secret, err := lookupPasswordSecret(hosts[i].PasswordRef); err == nil {
+			secret, err := lookupPasswordSecret(hosts[i].PasswordRef)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("%q: %v", hosts[i].Alias, err))
+			} else {
 				hosts[i].Password = secret
 			}
 		}
 		if len(hosts[i].Containers) > 0 {
-			hosts[i].Containers = hydrateHostPasswords(hosts[i].Containers)
+			var sub []string
+			hosts[i].Containers, sub = hydrateHostPasswords(hosts[i].Containers)
+			warnings = append(warnings, sub...)
 		}
 	}
-	return hosts
+	return hosts, warnings
 }
 
 // --- Config I/O ---
@@ -317,9 +330,14 @@ func loadConfig() ([]Group, []Host, []HistoryEntry, error) {
 
 	var cfg configFile
 	if err := json.Unmarshal(bytes, &cfg); err != nil {
-		return []Group{}, []Host{}, nil, fmt.Errorf("invalid config format")
+		return []Group{}, []Host{}, nil, fmt.Errorf("invalid config format: %w", err)
 	}
-	return cfg.Groups, hydrateHostPasswords(cfg.Hosts), cfg.History, nil
+	hydratedHosts, hydrateWarnings := hydrateHostPasswords(cfg.Hosts)
+	var hydrateErr error
+	if len(hydrateWarnings) > 0 {
+		hydrateErr = fmt.Errorf("keychain lookup failed: %s", strings.Join(hydrateWarnings, "; "))
+	}
+	return cfg.Groups, hydratedHosts, cfg.History, hydrateErr
 }
 
 func saveConfig(groups []Group, hosts []Host, history []HistoryEntry) error {
@@ -345,9 +363,6 @@ func saveConfig(groups []Group, hosts []Host, history []HistoryEntry) error {
 		return err
 	}
 	if _, err := f.Write(bytes); err != nil {
-		return err
-	}
-	if err := f.Chmod(0600); err != nil {
 		return err
 	}
 	if err := f.Close(); err != nil {

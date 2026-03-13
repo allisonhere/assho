@@ -72,7 +72,7 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.focusIndex == fieldKeyFile && m.keyPickFocus {
 			m.keyPickFocus = false
-			m.focusIndex = fieldPassword
+			m.focusIndex = fieldNotes
 			return m, m.focusInputs()
 		}
 		m.focusIndex++
@@ -101,7 +101,7 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focusIndex = len(m.inputs) - 1
 			return m, m.focusInputs()
 		}
-		if m.focusIndex == fieldPassword {
+		if m.focusIndex == fieldNotes {
 			m.focusIndex = fieldKeyFile
 			m.keyPickFocus = true
 			return m, nil
@@ -137,9 +137,10 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.state = stateList
 				m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
 				m.statusIsError = true
+				m.statusVersion++
 				m.deleteFocus = false
 				m.deleteArmed = false
-				return m, nil
+				return m, statusClearCmd(m.statusVersion)
 			}
 			m.state = stateList
 			m.deleteFocus = false

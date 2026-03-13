@@ -66,19 +66,22 @@ func testConnection(h Host) tea.Cmd {
 		binary := "ssh"
 		cmdArgs := args
 		// Prefer key-based auth when an identity file is configured.
-		// Only force sshpass when password is set and no key file is provided.
+		// Only use sshpass when password is set and no key file is provided.
 		if h.Password != "" && strings.TrimSpace(h.IdentityFile) == "" {
 			sshpassPath, err := exec.LookPath("sshpass")
 			if err != nil {
 				return testConnectionMsg{err: fmt.Errorf("password provided but sshpass not installed")}
 			}
 			binary = sshpassPath
-			cmdArgs = append([]string{"-p", h.Password, "ssh"}, args...)
+			cmdArgs = append([]string{"-e", "ssh"}, args...)
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, binary, cmdArgs...)
+		if h.Password != "" && binary != "ssh" {
+			cmd.Env = append(os.Environ(), "SSHPASS="+h.Password)
+		}
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
@@ -117,26 +120,23 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 		if h.ProxyJump != "" {
 			args = append([]string{"-J", h.ProxyJump}, args...)
 		}
-		// If password exists, use sshpass?
-		// For simplicity, we assume key-based or agent for scanning to avoid hanging
-		// Or we can use the same sshpass logic if available
-
 		finalCmd := "ssh"
 		sshArgs := append(args, cmdStr)
 
 		if h.Password != "" {
 			sshpassPath, err := exec.LookPath("sshpass")
 			if err == nil {
-				finalBinary := sshpassPath
-				newArgs := []string{"-p", h.Password, "ssh"}
-				sshArgs = append(newArgs, sshArgs...)
-				finalCmd = finalBinary
+				sshArgs = append([]string{"-e", "ssh"}, sshArgs...)
+				finalCmd = sshpassPath
 			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, finalCmd, sshArgs...)
+		if h.Password != "" && finalCmd != "ssh" {
+			cmd.Env = append(os.Environ(), "SSHPASS="+h.Password)
+		}
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
@@ -155,7 +155,6 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 			if len(parts) >= 2 {
 				id := parts[0]
 				name := parts[1]
-				// image := parts[2]
 				containers = append(containers, Host{
 					ID:          newHostID(),
 					Alias:       name,
@@ -175,6 +174,9 @@ func buildSSHArgs(h Host, forceTTY bool, remoteCmd string) []string {
 	if forceTTY {
 		args = append(args, "-t")
 	}
+	if h.ForwardAgent {
+		args = append(args, "-A")
+	}
 	if h.User != "" {
 		args = append(args, "-l", h.User)
 	}
@@ -187,6 +189,9 @@ func buildSSHArgs(h Host, forceTTY bool, remoteCmd string) []string {
 	if h.ProxyJump != "" {
 		args = append(args, "-J", h.ProxyJump)
 	}
+	if h.LocalForward != "" {
+		args = append(args, "-L", h.LocalForward)
+	}
 	args = append(args, h.Hostname)
 	if remoteCmd != "" {
 		args = append(args, remoteCmd)
@@ -194,15 +199,15 @@ func buildSSHArgs(h Host, forceTTY bool, remoteCmd string) []string {
 	return args
 }
 
-func buildSSHCommand(password string, sshArgs []string) (string, []string, bool) {
+func buildSSHCommand(password string, sshArgs []string) (string, []string, []string, bool) {
 	if password == "" {
-		return "ssh", sshArgs, true
+		return "ssh", sshArgs, nil, true
 	}
 	sshpassPath, err := exec.LookPath("sshpass")
 	if err != nil {
-		return "ssh", sshArgs, false
+		return "ssh", sshArgs, nil, false
 	}
-	return sshpassPath, append([]string{"-p", password, "ssh"}, sshArgs...), true
+	return sshpassPath, append([]string{"-e", "ssh"}, sshArgs...), []string{"SSHPASS=" + password}, true
 }
 
 func formatTestStatus(err error) (string, bool) {

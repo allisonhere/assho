@@ -13,6 +13,7 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateList
 		m.groupAction = ""
 		m.groupTarget = ""
+		m.formError = ""
 		return m, nil
 	case "enter":
 		name := strings.TrimSpace(m.groupInput.Value())
@@ -30,7 +31,7 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.groupAction == "create" {
 			snapshot := m.snapshot()
-			m.rawGroups = append(m.rawGroups, Group{ID: newHostID(), Name: name, Expanded: true})
+			m.rawGroups = append(m.rawGroups, Group{ID: newGroupID(), Name: name, Expanded: true})
 			m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
 			if err := m.save(); err != nil {
 				m.restoreSnapshot(snapshot)

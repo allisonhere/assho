@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
@@ -14,6 +15,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+type statusClearMsg struct{ version int }
+
+func statusClearCmd(version int) tea.Cmd {
+	return tea.Tick(4*time.Second, func(time.Time) tea.Msg {
+		return statusClearMsg{version: version}
+	})
+}
 
 // --- Main Model ---
 
@@ -29,15 +38,18 @@ const (
 
 // Form field indices (must match newFormInputs order).
 const (
-	fieldAlias     = 0
-	fieldHostname  = 1
-	fieldUser      = 2
-	fieldPort      = 3
-	fieldProxyJump = 4
-	fieldKeyFile   = 5
-	fieldPassword  = 6
-	fieldGroup     = 7
-	fieldCount     = 8
+	fieldAlias        = 0
+	fieldHostname     = 1
+	fieldUser         = 2
+	fieldPort         = 3
+	fieldProxyJump    = 4
+	fieldLocalForward = 5
+	fieldKeyFile      = 6
+	fieldNotes        = 7
+	fieldPassword     = 8
+	fieldForwardAgent = 9
+	fieldGroup        = 10
+	fieldCount        = 11
 )
 
 type model struct {
@@ -75,6 +87,7 @@ type model struct {
 	listDeleteLabel string
 	statusMessage   string
 	statusIsError   bool
+	statusVersion   int
 	history         []HistoryEntry
 	historyList     list.Model
 	aboutOpen       bool
@@ -124,7 +137,34 @@ func cloneHistory(history []HistoryEntry) []HistoryEntry {
 func flattenHosts(groups []Group, hosts []Host) []list.Item {
 	var items []list.Item
 
-	// Ungrouped hosts first.
+	// Pinned hosts first under a synthetic group header.
+	var pinnedIdx []int
+	for i := range hosts {
+		if hosts[i].Pinned && !hosts[i].IsContainer {
+			pinnedIdx = append(pinnedIdx, i)
+		}
+	}
+	if len(pinnedIdx) > 0 {
+		items = append(items, groupItem{
+			Group:     Group{ID: "__pinned__", Name: "★ Pinned", Expanded: true},
+			HostCount: len(pinnedIdx),
+		})
+		for _, i := range pinnedIdx {
+			h := hosts[i]
+			h.ListIndent = 1
+			items = append(items, h)
+			if h.Expanded {
+				for j := range h.Containers {
+					c := h.Containers[j]
+					c.ParentID = h.ID
+					c.ListIndent = 2
+					items = append(items, c)
+				}
+			}
+		}
+	}
+
+	// Ungrouped hosts.
 	for i := range hosts {
 		if hosts[i].GroupID != "" {
 			continue
@@ -145,7 +185,13 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 	// Then grouped hosts under each group row.
 	for i := range groups {
 		g := groups[i]
-		items = append(items, groupItem{Group: g})
+		hostCount := 0
+		for j := range hosts {
+			if hosts[j].GroupID == g.ID {
+				hostCount++
+			}
+		}
+		items = append(items, groupItem{Group: g, HostCount: hostCount})
 		if !g.Expanded {
 			continue
 		}
@@ -174,6 +220,32 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 // filter mode so that hosts inside collapsed groups are searchable.
 func flattenAll(groups []Group, hosts []Host) []list.Item {
 	var items []list.Item
+
+	// Pinned section first.
+	var pinnedIdx []int
+	for i := range hosts {
+		if hosts[i].Pinned && !hosts[i].IsContainer {
+			pinnedIdx = append(pinnedIdx, i)
+		}
+	}
+	if len(pinnedIdx) > 0 {
+		items = append(items, groupItem{
+			Group:     Group{ID: "__pinned__", Name: "★ Pinned", Expanded: true},
+			HostCount: len(pinnedIdx),
+		})
+		for _, i := range pinnedIdx {
+			h := hosts[i]
+			h.ListIndent = 1
+			items = append(items, h)
+			for j := range h.Containers {
+				c := h.Containers[j]
+				c.ParentID = h.ID
+				c.ListIndent = 2
+				items = append(items, c)
+			}
+		}
+	}
+
 	for i := range hosts {
 		if hosts[i].GroupID != "" {
 			continue
@@ -190,7 +262,13 @@ func flattenAll(groups []Group, hosts []Host) []list.Item {
 	}
 	for i := range groups {
 		g := groups[i]
-		items = append(items, groupItem{Group: g})
+		hostCount := 0
+		for j := range hosts {
+			if hosts[j].GroupID == g.ID {
+				hostCount++
+			}
+		}
+		items = append(items, groupItem{Group: g, HostCount: hostCount})
 		for j := range hosts {
 			if hosts[j].GroupID != g.ID {
 				continue
@@ -209,6 +287,18 @@ func flattenAll(groups []Group, hosts []Host) []list.Item {
 	return items
 }
 
+// buildLastConnected returns a map of hostID → most-recent connection timestamp
+// built from history (which is ordered newest-first).
+func buildLastConnected(history []HistoryEntry) map[string]int64 {
+	m := make(map[string]int64, len(history))
+	for _, e := range history {
+		if _, exists := m[e.HostID]; !exists {
+			m[e.HostID] = e.Timestamp
+		}
+	}
+	return m
+}
+
 func countContainers(hosts []Host) int {
 	count := 0
 	for _, h := range hosts {
@@ -219,8 +309,8 @@ func countContainers(hosts []Host) int {
 
 func newFormInputs() []textinput.Model {
 	inputs := make([]textinput.Model, fieldCount)
-	labels := []string{"Alias", "Hostname", "User", "Port", "ProxyJump", "Key File", "Password", "Group"}
-	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "user@bastion:port", "optional key path", "", "optional group name"}
+	labels := []string{"Alias", "Hostname", "User", "Port", "ProxyJump", "LocalFwd", "Key File", "Notes", "Password", "Fwd. Agent", "Group"}
+	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "user@bastion:port", "5432:localhost:5432", "optional key path", "optional note", "", "yes to enable (-A)", "optional group name"}
 	for i := range inputs {
 		t := textinput.New()
 		t.Cursor.Style = lipgloss.NewStyle().Foreground(colorSecondary)
@@ -254,9 +344,17 @@ func initialModel() model {
 			}
 		}
 	}
+
+	// Separate keychain lookup warnings (non-fatal, shown as a timed status
+	// message) from real config errors (shown as a permanent banner).
+	var keychainWarning string
+	if loadErr != nil && strings.HasPrefix(loadErr.Error(), "keychain lookup failed:") {
+		keychainWarning = loadErr.Error()
+		loadErr = nil
+	}
 	items := flattenHosts(groups, hosts)
 
-	delegate := hostDelegate{}
+	delegate := hostDelegate{lastConnected: buildLastConnected(history)}
 	l := list.New(items, delegate, 0, 0)
 	l.Title = ""
 	l.SetShowStatusBar(false)
@@ -293,7 +391,7 @@ func initialModel() model {
 	hl.SetShowTitle(false)
 	hl.SetShowHelp(false)
 
-	return model{
+	m := model{
 		list:        l,
 		rawGroups:   groups,
 		rawHosts:    hosts,
@@ -306,10 +404,20 @@ func initialModel() model {
 		history:     history,
 		historyList: hl,
 	}
+	if keychainWarning != "" {
+		m.statusMessage = keychainWarning
+		m.statusIsError = true
+		m.statusVersion++
+	}
+	return m
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, headerTick(), dockerRefreshTick())
+	cmds := []tea.Cmd{m.spinner.Tick, headerTick(), dockerRefreshTick()}
+	if m.statusMessage != "" {
+		cmds = append(cmds, statusClearCmd(m.statusVersion))
+	}
+	return tea.Batch(cmds...)
 }
 
 // --- Finder Helpers ---
@@ -396,10 +504,20 @@ func (m *model) populateForm(h Host) {
 	m.inputs[fieldPort].CursorEnd()
 	m.inputs[fieldProxyJump].SetValue(h.ProxyJump)
 	m.inputs[fieldProxyJump].CursorEnd()
+	m.inputs[fieldLocalForward].SetValue(h.LocalForward)
+	m.inputs[fieldLocalForward].CursorEnd()
 	m.inputs[fieldKeyFile].SetValue(h.IdentityFile)
 	m.inputs[fieldKeyFile].CursorEnd()
+	m.inputs[fieldNotes].SetValue(h.Notes)
+	m.inputs[fieldNotes].CursorEnd()
 	m.inputs[fieldPassword].SetValue(h.Password)
 	m.inputs[fieldPassword].CursorEnd()
+	if h.ForwardAgent {
+		m.inputs[fieldForwardAgent].SetValue("yes")
+	} else {
+		m.inputs[fieldForwardAgent].SetValue("")
+	}
+	m.inputs[fieldForwardAgent].CursorEnd()
 	groupName := ""
 	if h.GroupID != "" {
 		if idx := findGroupIndexByID(m.rawGroups, h.GroupID); idx != -1 {
@@ -417,6 +535,10 @@ func (m *model) saveFromForm() error {
 	if alias == "" {
 		return fmt.Errorf("alias is required")
 	}
+	hostname := strings.TrimSpace(m.inputs[fieldHostname].Value())
+	if hostname == "" {
+		return fmt.Errorf("hostname is required")
+	}
 	if portStr := strings.TrimSpace(m.inputs[fieldPort].Value()); portStr != "" {
 		n, err := strconv.Atoi(portStr)
 		if err != nil || n < 1 || n > 65535 {
@@ -431,15 +553,19 @@ func (m *model) saveFromForm() error {
 		}
 	}
 
+	fwdAgent := strings.ToLower(strings.TrimSpace(m.inputs[fieldForwardAgent].Value()))
 	newHost := Host{
 		ID:           "",
 		Alias:        alias,
-		Hostname:     m.inputs[fieldHostname].Value(),
+		Hostname:     hostname,
 		User:         m.inputs[fieldUser].Value(),
 		Port:         m.inputs[fieldPort].Value(),
 		ProxyJump:    m.inputs[fieldProxyJump].Value(),
+		LocalForward: m.inputs[fieldLocalForward].Value(),
 		IdentityFile: m.inputs[fieldKeyFile].Value(),
+		Notes:        m.inputs[fieldNotes].Value(),
 		Password:     m.inputs[fieldPassword].Value(),
+		ForwardAgent: fwdAgent == "yes" || fwdAgent == "1" || fwdAgent == "true",
 	}
 	groupName := strings.TrimSpace(m.inputs[fieldGroup].Value())
 	if !m.groupCustom {
@@ -463,7 +589,7 @@ func (m *model) saveFromForm() error {
 		groupIdx := findGroupByName(m.rawGroups, groupName)
 		if groupIdx == -1 {
 			m.rawGroups = append(m.rawGroups, Group{
-				ID:       newHostID(),
+				ID:       newGroupID(),
 				Name:     groupName,
 				Expanded: true,
 			})
@@ -476,10 +602,11 @@ func (m *model) saveFromForm() error {
 		// Update existing
 		for i, h := range m.rawHosts {
 			if h.ID == m.selectedHost.ID {
-				// Preserve containers/expanded state
+				// Preserve containers/expanded/pinned state
 				newHost.ID = h.ID
 				newHost.Containers = h.Containers
 				newHost.Expanded = h.Expanded
+				newHost.Pinned = h.Pinned
 				m.rawHosts[i] = newHost
 				break
 			}
@@ -499,6 +626,10 @@ func (m *model) saveFromForm() error {
 
 func (m *model) save() error {
 	return saveConfig(m.rawGroups, m.rawHosts, m.history)
+}
+
+func (m *model) refreshDelegate() {
+	m.list.SetDelegate(hostDelegate{lastConnected: buildLastConnected(m.history)})
 }
 
 func (m *model) rebuildHistoryList() {
@@ -533,6 +664,7 @@ func (m *model) rebuildHistoryList() {
 		_ = m.save()
 	}
 	m.historyList.SetItems(items)
+	m.refreshDelegate()
 }
 
 func (m *model) buildGroupOptions(selectedName string) {
@@ -605,6 +737,7 @@ func (m *model) openGroupPrompt(action, targetID, initialName string) {
 	m.state = stateGroupPrompt
 	m.groupAction = action
 	m.groupTarget = targetID
+	m.formError = ""
 	m.groupInput.Reset()
 	m.groupInput.SetValue(initialName)
 	m.groupInput.CursorEnd()

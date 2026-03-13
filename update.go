@@ -36,6 +36,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !msg.background {
 				m.statusMessage = fmt.Sprintf("Scan failed: %v", msg.err)
 				m.statusIsError = true
+				m.statusVersion++
+				return m, statusClearCmd(m.statusVersion)
 			}
 		} else {
 			if msg.hostIndex >= 0 && msg.hostIndex < len(m.rawHosts) {
@@ -54,11 +56,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmds...)
+	case statusClearMsg:
+		if msg.version == m.statusVersion {
+			m.statusMessage = ""
+			m.statusIsError = false
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.list.SetWidth(msg.Width)
-		m.list.SetHeight(msg.Height - 12) // Room for header + help bar
+		listHeight := msg.Height - 13 // Room for header + two-row help bar
+		if listHeight < 4 {
+			listHeight = 4
+		}
+		m.list.SetHeight(listHeight)
 		m.historyList.SetWidth(msg.Width)
 		m.historyList.SetHeight(msg.Height - 8)
 		m.filepicker.Height = msg.Height - 8

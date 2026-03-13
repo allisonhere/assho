@@ -17,10 +17,6 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
-	if m.statusMessage != "" {
-		m.statusMessage = ""
-		m.statusIsError = false
-	}
 	if m.listDeleteArmed && msg.String() != "d" && msg.String() != "x" && msg.String() != "esc" {
 		m.clearListDeleteConfirm()
 	}
@@ -67,8 +63,10 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.restoreSnapshot(snapshot)
 					m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
 					m.statusIsError = true
-					return m, nil
+					m.statusVersion++
+					return m, statusClearCmd(m.statusVersion)
 				}
+				m.refreshDelegate()
 				m.sshToRun = &i
 				return m, tea.Quit
 			}
@@ -89,8 +87,10 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.restoreSnapshot(snapshot)
 					m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
 					m.statusIsError = true
-					return m, nil
+					m.statusVersion++
+					return m, statusClearCmd(m.statusVersion)
 				}
+				m.refreshDelegate()
 				m.sshToRun = &i
 				return m, tea.Quit
 			}
@@ -197,7 +197,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if err := m.deleteGroupByID(g.ID); err != nil {
 					m.statusMessage = fmt.Sprintf("Failed to save group deletion: %v", err)
 					m.statusIsError = true
-					return m, nil
+					m.statusVersion++
+					return m, statusClearCmd(m.statusVersion)
 				}
 				m.clearListDeleteConfirm()
 				return m, nil
@@ -222,9 +223,26 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.restoreSnapshot(snapshot)
 					m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
 					m.statusIsError = true
-					return m, nil
+					m.statusVersion++
+					return m, statusClearCmd(m.statusVersion)
 				}
 				m.clearListDeleteConfirm()
+			}
+		}
+	case "p":
+		if i, ok := m.list.SelectedItem().(Host); ok && !i.IsContainer {
+			idx := findHostIndexByID(m.rawHosts, i.ID)
+			if idx != -1 {
+				snapshot := m.snapshot()
+				m.rawHosts[idx].Pinned = !m.rawHosts[idx].Pinned
+				m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
+				if err := m.save(); err != nil {
+					m.restoreSnapshot(snapshot)
+					m.statusMessage = fmt.Sprintf("Failed to save: %v", err)
+					m.statusIsError = true
+					m.statusVersion++
+					return m, statusClearCmd(m.statusVersion)
+				}
 			}
 		}
 	case "i":
@@ -232,7 +250,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			m.statusMessage = err.Error()
 			m.statusIsError = true
-			return m, nil
+			m.statusVersion++
+			return m, statusClearCmd(m.statusVersion)
 		}
 		snapshot := m.snapshot()
 		m.rawHosts = append(m.rawHosts, imported...)
@@ -241,21 +260,25 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.restoreSnapshot(snapshot)
 			m.statusMessage = fmt.Sprintf("Imported %d hosts but failed to save: %v", len(imported), err)
 			m.statusIsError = true
-			return m, nil
+			m.statusVersion++
+			return m, statusClearCmd(m.statusVersion)
 		}
 		m.statusMessage = fmt.Sprintf("Imported %d hosts (%d skipped)", len(imported), skipped)
 		m.statusIsError = false
-		return m, nil
+		m.statusVersion++
+		return m, statusClearCmd(m.statusVersion)
 	case "ctrl+e":
 		exported, skipped, err := exportSSHConfig(m.rawHosts)
 		if err != nil {
 			m.statusMessage = err.Error()
 			m.statusIsError = true
-			return m, nil
+			m.statusVersion++
+			return m, statusClearCmd(m.statusVersion)
 		}
 		m.statusMessage = fmt.Sprintf("Exported %d hosts to ~/.ssh/config (%d skipped)", exported, skipped)
 		m.statusIsError = false
-		return m, nil
+		m.statusVersion++
+		return m, statusClearCmd(m.statusVersion)
 	case "h":
 		m.rebuildHistoryList()
 		m.state = stateHistory
@@ -277,13 +300,23 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMessage = msg
 			m.statusIsError = true
 		}
-		return m, nil
+		m.statusVersion++
+		var clearCmd tea.Cmd
+		if m.statusMessage != "" {
+			clearCmd = statusClearCmd(m.statusVersion)
+		}
+		return m, clearCmd
 	case "shift+down":
 		if msg := m.moveItem(+1); msg != "" {
 			m.statusMessage = msg
 			m.statusIsError = true
 		}
-		return m, nil
+		m.statusVersion++
+		var clearCmd tea.Cmd
+		if m.statusMessage != "" {
+			clearCmd = statusClearCmd(m.statusVersion)
+		}
+		return m, clearCmd
 	case "x":
 		if g, ok := m.list.SelectedItem().(groupItem); ok {
 			if !m.listDeleteArmed || m.listDeleteID != g.ID || m.listDeleteType != "group" {
@@ -296,7 +329,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err := m.deleteGroupByID(g.ID); err != nil {
 				m.statusMessage = fmt.Sprintf("Failed to save group deletion: %v", err)
 				m.statusIsError = true
-				return m, nil
+				m.statusVersion++
+				return m, statusClearCmd(m.statusVersion)
 			}
 			m.clearListDeleteConfirm()
 			return m, nil
