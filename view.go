@@ -87,14 +87,64 @@ func (m model) renderListView() string {
 }
 
 func (m model) renderAboutView() string {
+	base := m.renderListView()
 	modal := renderAboutModal(m.about.frame)
-	return lipgloss.Place(
-		m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		modal,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
-	)
+	return overlayCenter(base, modal, m.width, m.height)
+}
+
+// overlayCenter composites modal lines centered over base lines. Base lines
+// that fall outside the modal's bounding box pass through unchanged, so the
+// list view remains visible around the edges instead of being blacked out.
+func overlayCenter(base, modal string, width, height int) string {
+	baseLines := strings.Split(base, "\n")
+	modalLines := strings.Split(modal, "\n")
+
+	modalH := len(modalLines)
+	modalW := 0
+	for _, l := range modalLines {
+		if w := lipgloss.Width(l); w > modalW {
+			modalW = w
+		}
+	}
+
+	baseH := len(baseLines)
+	if height > baseH {
+		baseH = height
+	}
+	baseW := width
+	for _, l := range baseLines {
+		if w := lipgloss.Width(l); w > baseW {
+			baseW = w
+		}
+	}
+
+	top := (baseH - modalH) / 2
+	if top < 0 {
+		top = 0
+	}
+	left := (baseW - modalW) / 2
+	if left < 0 {
+		left = 0
+	}
+
+	out := make([]string, baseH)
+	for i := 0; i < baseH; i++ {
+		if i < len(baseLines) {
+			out[i] = baseLines[i]
+		}
+		mi := i - top
+		if mi < 0 || mi >= modalH {
+			continue
+		}
+		// Pad base line out to `left` columns then append modal line.
+		baseW := lipgloss.Width(out[i])
+		pad := left - baseW
+		if pad < 0 {
+			pad = 0
+		}
+		out[i] = out[i] + strings.Repeat(" ", pad) + modalLines[mi]
+	}
+	return strings.Join(out, "\n")
 }
 
 func (m model) renderFilePickerView() string {

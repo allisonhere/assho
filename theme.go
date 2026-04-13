@@ -162,14 +162,14 @@ func renderListHelp(selected list.Item) string {
 	case Host:
 		if item.IsContainer {
 			contextEntries = []string{
-				helpEntry("enter", "conn"),
+				helpEntry("enter", "connect"),
 			}
 		} else {
 			contextEntries = []string{
-				helpEntry("enter", "conn"),
+				helpEntry("enter", "connect"),
 				helpEntry("e", "edit"),
-				helpEntry("c", "dup"),
-				helpEntry("d", "del"),
+				helpEntry("c", "duplicate"),
+				helpEntry("d", "delete"),
 				helpEntry("p", "pin"),
 				helpEntry("space", "expand"),
 				helpEntry("ctrl+d", "scan"),
@@ -180,7 +180,7 @@ func renderListHelp(selected list.Item) string {
 		contextEntries = []string{
 			helpEntry("enter", "toggle"),
 			helpEntry("r", "rename"),
-			helpEntry("d", "del"),
+			helpEntry("d", "delete"),
 			helpEntry("⇧↑↓", "move"),
 		}
 	}
@@ -188,9 +188,9 @@ func renderListHelp(selected list.Item) string {
 	baseEntries := []string{
 		helpEntry("n", "new"),
 		helpEntry("g", "group"),
-		helpEntry("/", "filt"),
-		helpEntry("h", "hist"),
-		helpEntry("i", "imp"),
+		helpEntry("/", "filter"),
+		helpEntry("h", "history"),
+		helpEntry("i", "import"),
 		helpEntry("a", "about"),
 		helpEntry("q", "quit"),
 	}
