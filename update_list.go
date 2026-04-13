@@ -17,7 +17,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
-	if m.listDeleteArmed && msg.String() != "d" && msg.String() != "x" && msg.String() != "esc" {
+	if m.listDelete.armed && msg.String() != "d" && msg.String() != "x" && msg.String() != "esc" {
 		m.clearListDeleteConfirm()
 	}
 	switch msg.String() {
@@ -25,7 +25,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "esc":
-		if m.listDeleteArmed {
+		if m.listDelete.armed {
 			m.clearListDeleteConfirm()
 			return m, nil
 		}
@@ -187,11 +187,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if index := m.list.Index(); index >= 0 && len(m.list.Items()) > 0 {
 			if g, ok := m.list.SelectedItem().(groupItem); ok {
-				if !m.listDeleteArmed || m.listDeleteID != g.ID || m.listDeleteType != "group" {
-					m.listDeleteArmed = true
-					m.listDeleteID = g.ID
-					m.listDeleteType = "group"
-					m.listDeleteLabel = g.Name
+				if !m.listDelete.armed || m.listDelete.id != g.ID || m.listDelete.kind != "group" {
+					m.listDelete = listDeleteState{armed: true, id: g.ID, kind: "group", label: g.Name}
 					return m, nil
 				}
 				if err := m.deleteGroupByID(g.ID); err != nil {
@@ -204,11 +201,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if i, ok := m.list.SelectedItem().(Host); ok {
-				if !m.listDeleteArmed || m.listDeleteID != i.ID || m.listDeleteType != "host" {
-					m.listDeleteArmed = true
-					m.listDeleteID = i.ID
-					m.listDeleteType = "host"
-					m.listDeleteLabel = i.Alias
+				if !m.listDelete.armed || m.listDelete.id != i.ID || m.listDelete.kind != "host" {
+					m.listDelete = listDeleteState{armed: true, id: i.ID, kind: "host", label: i.Alias}
 					return m, nil
 				}
 				snapshot := m.snapshot()
@@ -272,8 +266,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateHistory
 		return m, nil
 	case "a":
-		m.aboutOpen = true
-		m.aboutFrame = 0
+		m.about.open = true
+		m.about.frame = 0
 		return m, aboutTick()
 	case "g":
 		m.openGroupPrompt("create", "", "")
@@ -307,11 +301,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, clearCmd
 	case "x":
 		if g, ok := m.list.SelectedItem().(groupItem); ok {
-			if !m.listDeleteArmed || m.listDeleteID != g.ID || m.listDeleteType != "group" {
-				m.listDeleteArmed = true
-				m.listDeleteID = g.ID
-				m.listDeleteType = "group"
-				m.listDeleteLabel = g.Name
+			if !m.listDelete.armed || m.listDelete.id != g.ID || m.listDelete.kind != "group" {
+				m.listDelete = listDeleteState{armed: true, id: g.ID, kind: "group", label: g.Name}
 				return m, nil
 			}
 			if err := m.deleteGroupByID(g.ID); err != nil {

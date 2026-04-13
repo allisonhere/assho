@@ -36,7 +36,7 @@ func (m model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.state == stateList || m.aboutOpen {
+	if m.state == stateList || m.about.open {
 		header := renderHeader(m.headerFrame, len(m.rawHosts), countContainers(m.rawHosts))
 
 		var scanStatus string
@@ -45,8 +45,8 @@ func (m model) View() string {
 				lipgloss.NewStyle().Foreground(colorSecondary).Render("Scanning containers...") + "\n"
 		}
 		var deleteStatus string
-		if m.listDeleteArmed {
-			deleteStatus = "\n " + testFailStyle.Render("Press again to confirm delete "+m.listDeleteType+": "+m.listDeleteLabel+" (Esc to cancel)") + "\n"
+		if m.listDelete.armed {
+			deleteStatus = "\n " + testFailStyle.Render("Press again to confirm delete "+m.listDelete.kind+": "+m.listDelete.label+" (Esc to cancel)") + "\n"
 		}
 
 		var importStatus string
@@ -66,8 +66,8 @@ func (m model) View() string {
 		}
 		help := "\n" + renderListHelp(m.list.SelectedItem())
 
-		if m.aboutOpen {
-			modal := renderAboutModal(m.aboutFrame)
+		if m.about.open {
+			modal := renderAboutModal(m.about.frame)
 			overlay := lipgloss.Place(
 				m.width, m.height,
 				lipgloss.Center, lipgloss.Center,
@@ -94,10 +94,10 @@ func (m model) View() string {
 	}
 	if m.state == stateGroupPrompt {
 		title := "New Group"
-		if m.groupAction == "rename" {
+		if m.groupPrompt.action == "rename" {
 			title = "Rename Group"
 		}
-		box := formBoxStyle.Render(formTitleStyle.Render(title) + "\n\n" + m.groupInput.View())
+		box := formBoxStyle.Render(formTitleStyle.Render(title) + "\n\n" + m.groupPrompt.input.View())
 		help := "\n" + helpBarStyle.Render(helpEntry("enter", "save")+" | "+helpEntry("esc", "cancel"))
 		return appStyle.Render(box + help)
 	}

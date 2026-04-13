@@ -14,13 +14,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case aboutTickMsg:
-		if m.aboutOpen {
-			m.aboutFrame++
+		if m.about.open {
+			m.about.frame++
 			return m, aboutTick()
 		}
 		return m, nil
 	case headerTickMsg:
-		if m.state == stateList && !m.aboutOpen {
+		if m.state == stateList && !m.about.open {
 			m.headerFrame++
 		}
 		return m, headerTick()
@@ -76,7 +76,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filepicker.Height = msg.Height - 8
 		return m, nil
 	case tea.KeyMsg:
-		if m.aboutOpen {
+		if m.about.open {
 			return m.updateAbout(msg)
 		}
 		switch m.state {
@@ -102,7 +102,7 @@ func (m model) updateAbout(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "a", "esc", "q":
-		m.aboutOpen = false
+		m.about.open = false
 	}
 	return m, nil
 }
@@ -123,7 +123,7 @@ func (m model) forwardMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case stateGroupPrompt:
-		m.groupInput, cmd = m.groupInput.Update(msg)
+		m.groupPrompt.input, cmd = m.groupPrompt.input.Update(msg)
 	case stateHistory:
 		m.historyList, cmd = m.historyList.Update(msg)
 	}

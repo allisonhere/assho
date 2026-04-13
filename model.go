@@ -57,7 +57,7 @@ type model struct {
 	rawGroups       []Group
 	rawHosts        []Host // Source of truth for tree structure
 	inputs          []textinput.Model
-	groupInput      textinput.Model
+	groupPrompt     groupPromptState
 	filepicker      filepicker.Model
 	spinner         spinner.Model
 	focusIndex      int
@@ -77,22 +77,34 @@ type model struct {
 	groupOptions    []string
 	groupIndex      int
 	groupCustom     bool
-	groupAction     string // create|rename
-	groupTarget     string // group id for rename
-	deleteFocus     bool   // true when Delete Host button is focused in edit form
+	deleteFocus     bool // true when Delete Host button is focused in edit form
 	deleteArmed     bool   // true when delete confirmation is armed
-	listDeleteArmed bool
-	listDeleteID    string
-	listDeleteType  string // host|group
-	listDeleteLabel string
+	listDelete      listDeleteState
 	statusMessage   string
 	statusIsError   bool
 	statusVersion   int
 	history         []HistoryEntry
 	historyList     list.Model
-	aboutOpen       bool
-	aboutFrame      int
+	about           aboutState
 	headerFrame     int
+}
+
+type groupPromptState struct {
+	input  textinput.Model
+	action string // create|rename
+	target string // group id for rename
+}
+
+type aboutState struct {
+	open  bool
+	frame int
+}
+
+type listDeleteState struct {
+	armed bool
+	id    string
+	kind  string // host|group
+	label string
 }
 
 type modelSnapshot struct {
@@ -396,7 +408,7 @@ func initialModel() model {
 		rawGroups:   groups,
 		rawHosts:    hosts,
 		inputs:      inputs,
-		groupInput:  groupInput,
+		groupPrompt: groupPromptState{input: groupInput},
 		filepicker:  fp,
 		spinner:     sp,
 		state:       stateList,
@@ -735,13 +747,13 @@ func (m *model) deleteGroupByID(groupID string) error {
 
 func (m *model) openGroupPrompt(action, targetID, initialName string) {
 	m.state = stateGroupPrompt
-	m.groupAction = action
-	m.groupTarget = targetID
+	m.groupPrompt.action = action
+	m.groupPrompt.target = targetID
 	m.formError = ""
-	m.groupInput.Reset()
-	m.groupInput.SetValue(initialName)
-	m.groupInput.CursorEnd()
-	m.groupInput.Focus()
+	m.groupPrompt.input.Reset()
+	m.groupPrompt.input.SetValue(initialName)
+	m.groupPrompt.input.CursorEnd()
+	m.groupPrompt.input.Focus()
 }
 
 // moveItem reorders the selected item in the list by swapping it with its
@@ -838,10 +850,7 @@ func (m *model) reselectItem(id string, isGroup bool) {
 }
 
 func (m *model) clearListDeleteConfirm() {
-	m.listDeleteArmed = false
-	m.listDeleteID = ""
-	m.listDeleteType = ""
-	m.listDeleteLabel = ""
+	m.listDelete = listDeleteState{}
 }
 
 func (m *model) snapshot() modelSnapshot {

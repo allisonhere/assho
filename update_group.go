@@ -11,25 +11,25 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.state = stateList
-		m.groupAction = ""
-		m.groupTarget = ""
+		m.groupPrompt.action = ""
+		m.groupPrompt.target = ""
 		m.formError = ""
 		return m, nil
 	case "enter":
-		name := strings.TrimSpace(m.groupInput.Value())
+		name := strings.TrimSpace(m.groupPrompt.input.Value())
 		if name == "" {
 			m.formError = "group name is required"
 			return m, nil
 		}
 		if idx := findGroupByName(m.rawGroups, name); idx != -1 {
-			if m.groupAction == "rename" && m.rawGroups[idx].ID == m.groupTarget {
+			if m.groupPrompt.action == "rename" && m.rawGroups[idx].ID == m.groupPrompt.target {
 				// no-op rename to same value
 			} else {
 				m.formError = "group name already exists"
 				return m, nil
 			}
 		}
-		if m.groupAction == "create" {
+		if m.groupPrompt.action == "create" {
 			snapshot := m.snapshot()
 			m.rawGroups = append(m.rawGroups, Group{ID: newGroupID(), Name: name, Expanded: true})
 			m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
@@ -38,10 +38,10 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.formError = fmt.Sprintf("failed to save group changes: %v", err)
 				return m, nil
 			}
-		} else if m.groupAction == "rename" {
+		} else if m.groupPrompt.action == "rename" {
 			snapshot := m.snapshot()
 			for i := range m.rawGroups {
-				if m.rawGroups[i].ID == m.groupTarget {
+				if m.rawGroups[i].ID == m.groupPrompt.target {
 					m.rawGroups[i].Name = name
 					break
 				}
@@ -54,13 +54,13 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.state = stateList
-		m.groupAction = ""
-		m.groupTarget = ""
+		m.groupPrompt.action = ""
+		m.groupPrompt.target = ""
 		m.formError = ""
 		return m, nil
 	default:
 		var cmd tea.Cmd
-		m.groupInput, cmd = m.groupInput.Update(msg)
+		m.groupPrompt.input, cmd = m.groupPrompt.input.Update(msg)
 		return m, cmd
 	}
 }
