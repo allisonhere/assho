@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type aboutTickMsg struct{}
@@ -136,13 +137,16 @@ func overlayCenter(base, modal string, width, height int) string {
 		if mi < 0 || mi >= modalH {
 			continue
 		}
-		// Pad base line out to `left` columns then append modal line.
+		// Truncate or pad base line to exactly `left` cells so the modal
+		// starts at the centered column regardless of base line width.
 		baseW := lipgloss.Width(out[i])
-		pad := left - baseW
-		if pad < 0 {
-			pad = 0
+		switch {
+		case baseW > left:
+			out[i] = ansi.Truncate(out[i], left, "")
+		case baseW < left:
+			out[i] += strings.Repeat(" ", left-baseW)
 		}
-		out[i] = out[i] + strings.Repeat(" ", pad) + modalLines[mi]
+		out[i] += modalLines[mi]
 	}
 	return strings.Join(out, "\n")
 }
