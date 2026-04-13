@@ -53,28 +53,26 @@ const (
 )
 
 type model struct {
-	list          list.Model
-	rawGroups     []Group
-	rawHosts      []Host // Source of truth for tree structure
-	form          formState
-	groupPrompt   groupPromptState
-	filepicker    filepicker.Model
-	spinner       spinner.Model
-	state         state
-	err           error
-	quitting      bool
-	sshToRun      *Host // If set, will exec ssh on quit
-	scanning      bool  // true while Docker scan in progress
-	width         int   // terminal width
-	height        int   // terminal height
-	listDelete    listDeleteState
-	statusMessage string
-	statusIsError bool
-	statusVersion int
-	history       []HistoryEntry
-	historyList   list.Model
-	about         aboutState
-	headerFrame   int
+	list        list.Model
+	rawGroups   []Group
+	rawHosts    []Host // Source of truth for tree structure
+	form        formState
+	groupPrompt groupPromptState
+	filepicker  filepicker.Model
+	spinner     spinner.Model
+	state       state
+	err         error
+	quitting    bool
+	sshToRun    *Host // If set, will exec ssh on quit
+	scanning    bool  // true while Docker scan in progress
+	width       int   // terminal width
+	height      int   // terminal height
+	listDelete  listDeleteState
+	status      statusState
+	history     []HistoryEntry
+	historyList list.Model
+	about       aboutState
+	headerFrame int
 }
 
 type formState struct {
@@ -102,6 +100,12 @@ type groupPromptState struct {
 type aboutState struct {
 	open  bool
 	frame int
+}
+
+type statusState struct {
+	message string
+	isError bool
+	version int
 }
 
 type listDeleteState struct {
@@ -421,17 +425,17 @@ func initialModel() model {
 		historyList: hl,
 	}
 	if keychainWarning != "" {
-		m.statusMessage = keychainWarning
-		m.statusIsError = true
-		m.statusVersion++
+		m.status.message = keychainWarning
+		m.status.isError = true
+		m.status.version++
 	}
 	return m
 }
 
 func (m model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.spinner.Tick, headerTick(), dockerRefreshTick()}
-	if m.statusMessage != "" {
-		cmds = append(cmds, statusClearCmd(m.statusVersion))
+	if m.status.message != "" {
+		cmds = append(cmds, statusClearCmd(m.status.version))
 	}
 	return tea.Batch(cmds...)
 }

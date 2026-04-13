@@ -25,8 +25,8 @@ func (m model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err := m.save(); err != nil {
 				m.restoreSnapshot(snapshot)
 				m.state = stateList
-				m.statusMessage = fmt.Sprintf("Failed to save history: %v", err)
-				m.statusIsError = true
+				m.status.message = fmt.Sprintf("Failed to save history: %v", err)
+				m.status.isError = true
 				return m, nil
 			}
 			m.sshToRun = &i

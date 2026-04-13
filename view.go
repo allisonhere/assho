@@ -36,72 +36,92 @@ func (m model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.state == stateList || m.about.open {
-		header := renderHeader(m.headerFrame, len(m.rawHosts), countContainers(m.rawHosts))
-
-		var scanStatus string
-		if m.scanning {
-			scanStatus = "\n " + m.spinner.View() + " " +
-				lipgloss.NewStyle().Foreground(colorSecondary).Render("Scanning containers...") + "\n"
-		}
-		var deleteStatus string
-		if m.listDelete.armed {
-			deleteStatus = "\n " + testFailStyle.Render("Press again to confirm delete "+m.listDelete.kind+": "+m.listDelete.label+" (Esc to cancel)") + "\n"
-		}
-
-		var importStatus string
-		if m.statusMessage != "" {
-			style := testSuccessStyle
-			marker := "✔"
-			if m.statusIsError {
-				style = testFailStyle
-				marker = "✘"
-			}
-			importStatus = "\n " + style.Render(marker+" "+m.statusMessage) + "\n"
-		}
-
-		content := header + m.list.View() + scanStatus + deleteStatus + importStatus
-		if m.err != nil {
-			content += "\n" + testFailStyle.Render(" Config warning: "+m.err.Error())
-		}
-		help := "\n" + renderListHelp(m.list.SelectedItem())
-
-		if m.about.open {
-			modal := renderAboutModal(m.about.frame)
-			overlay := lipgloss.Place(
-				m.width, m.height,
-				lipgloss.Center, lipgloss.Center,
-				modal,
-				lipgloss.WithWhitespaceChars(" "),
-				lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
-			)
-			return overlay
-		}
-
-		return appStyle.Render(content + help)
+	if m.about.open {
+		return m.renderAboutView()
 	}
-	if m.state == stateFilePicker {
-		title := formTitleStyle.Render("📂 Select Identity File")
-		content := fpBoxStyle.Render(m.filepicker.View())
-		help := "\n" + renderFilePickerHelp()
-		return appStyle.Render(title + "\n\n" + content + help)
+	switch m.state {
+	case stateList:
+		return m.renderListView()
+	case stateFilePicker:
+		return m.renderFilePickerView()
+	case stateHistory:
+		return m.renderHistoryView()
+	case stateGroupPrompt:
+		return m.renderGroupPromptView()
+	case stateForm:
+		return m.renderFormView()
 	}
-	if m.state == stateHistory {
-		title := formTitleStyle.Render("Recent Connections")
-		content := title + "\n\n" + m.historyList.View()
-		help := "\n" + renderHistoryHelp()
-		return appStyle.Render(content + help)
+	return ""
+}
+
+func (m model) renderListView() string {
+	header := renderHeader(m.headerFrame, len(m.rawHosts), countContainers(m.rawHosts))
+
+	var scanStatus string
+	if m.scanning {
+		scanStatus = "\n " + m.spinner.View() + " " +
+			lipgloss.NewStyle().Foreground(colorSecondary).Render("Scanning containers...") + "\n"
 	}
-	if m.state == stateGroupPrompt {
-		title := "New Group"
-		if m.groupPrompt.action == "rename" {
-			title = "Rename Group"
+	var deleteStatus string
+	if m.listDelete.armed {
+		deleteStatus = "\n " + testFailStyle.Render("Press again to confirm delete "+m.listDelete.kind+": "+m.listDelete.label+" (Esc to cancel)") + "\n"
+	}
+
+	var importStatus string
+	if m.status.message != "" {
+		style := testSuccessStyle
+		marker := "✔"
+		if m.status.isError {
+			style = testFailStyle
+			marker = "✘"
 		}
-		box := formBoxStyle.Render(formTitleStyle.Render(title) + "\n\n" + m.groupPrompt.input.View())
-		help := "\n" + helpBarStyle.Render(helpEntry("enter", "save")+" | "+helpEntry("esc", "cancel"))
-		return appStyle.Render(box + help)
+		importStatus = "\n " + style.Render(marker+" "+m.status.message) + "\n"
 	}
-	// Form View
+
+	content := header + m.list.View() + scanStatus + deleteStatus + importStatus
+	if m.err != nil {
+		content += "\n" + testFailStyle.Render(" Config warning: "+m.err.Error())
+	}
+	help := "\n" + renderListHelp(m.list.SelectedItem())
+	return appStyle.Render(content + help)
+}
+
+func (m model) renderAboutView() string {
+	modal := renderAboutModal(m.about.frame)
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		modal,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+	)
+}
+
+func (m model) renderFilePickerView() string {
+	title := formTitleStyle.Render("📂 Select Identity File")
+	content := fpBoxStyle.Render(m.filepicker.View())
+	help := "\n" + renderFilePickerHelp()
+	return appStyle.Render(title + "\n\n" + content + help)
+}
+
+func (m model) renderHistoryView() string {
+	title := formTitleStyle.Render("Recent Connections")
+	content := title + "\n\n" + m.historyList.View()
+	help := "\n" + renderHistoryHelp()
+	return appStyle.Render(content + help)
+}
+
+func (m model) renderGroupPromptView() string {
+	title := "New Group"
+	if m.groupPrompt.action == "rename" {
+		title = "Rename Group"
+	}
+	box := formBoxStyle.Render(formTitleStyle.Render(title) + "\n\n" + m.groupPrompt.input.View())
+	help := "\n" + helpBarStyle.Render(helpEntry("enter", "save")+" | "+helpEntry("esc", "cancel"))
+	return appStyle.Render(box + help)
+}
+
+func (m model) renderFormView() string {
 	var formTitle string
 	if m.form.selectedHost == nil {
 		formTitle = formTitleStyle.Render("✨ New Session")
@@ -126,21 +146,18 @@ func (m model) View() string {
 	divider := formDividerStyle.Render(strings.Repeat("─", dividerWidth))
 	activeFormBoxStyle := formBoxStyle.Width(formWidth)
 
-	// Build form content
-	var formContent strings.Builder
-	formContent.WriteString(formTitle + "\n\n")
+	var b strings.Builder
+	b.WriteString(formTitle + "\n\n")
 
-	// Connection section
-	formContent.WriteString(formSectionStyle.Render("  CONNECTION") + "\n")
-	formContent.WriteString(divider + "\n")
+	b.WriteString(formSectionStyle.Render("  CONNECTION") + "\n")
+	b.WriteString(divider + "\n")
 	for i := 0; i < 6; i++ {
-		formContent.WriteString(m.form.inputs[i].View() + "\n")
+		b.WriteString(m.form.inputs[i].View() + "\n")
 	}
 
-	formContent.WriteString("\n")
-	// Auth section
-	formContent.WriteString(formSectionStyle.Render("  AUTHENTICATION") + "\n")
-	formContent.WriteString(divider + "\n")
+	b.WriteString("\n")
+	b.WriteString(formSectionStyle.Render("  AUTHENTICATION") + "\n")
+	b.WriteString(divider + "\n")
 	pickStyle := lipgloss.NewStyle().
 		Foreground(colorText).
 		Background(colorSecondary).
@@ -149,16 +166,16 @@ func (m model) View() string {
 	if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 		pickStyle = pickStyle.Background(colorPrimary)
 	}
-	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.form.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
-	formContent.WriteString(m.form.inputs[fieldNotes].View() + "\n")
-	formContent.WriteString(m.form.inputs[fieldPassword].View() + "\n")
-	formContent.WriteString(m.form.inputs[fieldForwardAgent].View() + "\n")
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.form.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
+	b.WriteString(m.form.inputs[fieldNotes].View() + "\n")
+	b.WriteString(m.form.inputs[fieldPassword].View() + "\n")
+	b.WriteString(m.form.inputs[fieldForwardAgent].View() + "\n")
 
-	formContent.WriteString("\n")
-	formContent.WriteString(formSectionStyle.Render("  GROUPS") + "\n")
-	formContent.WriteString(divider + "\n")
+	b.WriteString("\n")
+	b.WriteString(formSectionStyle.Render("  GROUPS") + "\n")
+	b.WriteString(divider + "\n")
 	if m.form.groupCustom {
-		formContent.WriteString(m.form.inputs[fieldGroup].View() + "\n")
+		b.WriteString(m.form.inputs[fieldGroup].View() + "\n")
 	} else {
 		groupLabelStyle := lipgloss.NewStyle().Foreground(colorMuted)
 		groupValueStyle := lipgloss.NewStyle().Foreground(colorDimText)
@@ -170,7 +187,7 @@ func (m model) View() string {
 		if len(m.form.groupOptions) > 0 {
 			groupValue = m.form.groupOptions[m.form.groupIndex]
 		}
-		formContent.WriteString(groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶") + "\n")
+		b.WriteString(groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶") + "\n")
 	}
 
 	if m.form.selectedHost != nil {
@@ -189,30 +206,28 @@ func (m model) View() string {
 				Background(colorSubtle).
 				Padding(0, 1)
 		}
-		formContent.WriteString("\n  " + deleteStyle.Render(label) + "\n")
+		b.WriteString("\n  " + deleteStyle.Render(label) + "\n")
 		if m.form.deleteArmed {
-			formContent.WriteString("  " + formHintStyle.Render("Esc to cancel") + "\n")
+			b.WriteString("  " + formHintStyle.Render("Esc to cancel") + "\n")
 		}
 	}
 
-	// Test status
 	if m.form.testing {
-		formContent.WriteString("\n " + m.spinner.View() + " " +
+		b.WriteString("\n " + m.spinner.View() + " " +
 			testPendingStyle.Render("Testing connection..."))
 	} else if m.form.testStatus != "" {
 		if m.form.testResult {
-			formContent.WriteString("\n  " + testSuccessStyle.Render("✔ "+m.form.testStatus))
+			b.WriteString("\n  " + testSuccessStyle.Render("✔ "+m.form.testStatus))
 		} else {
-			formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.testStatus))
+			b.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.testStatus))
 		}
 	}
 	if m.form.formError != "" {
-		formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.formError))
+		b.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.formError))
 	}
 
-	form := activeFormBoxStyle.Render(formContent.String())
+	form := activeFormBoxStyle.Render(b.String())
 	help := "\n" + renderFormHelp()
-
 	return appStyle.Render(form + help)
 }
 

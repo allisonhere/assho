@@ -34,10 +34,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			if !msg.background {
-				m.statusMessage = fmt.Sprintf("Scan failed: %v", msg.err)
-				m.statusIsError = true
-				m.statusVersion++
-				return m, statusClearCmd(m.statusVersion)
+				m.status.message = fmt.Sprintf("Scan failed: %v", msg.err)
+				m.status.isError = true
+				m.status.version++
+				return m, statusClearCmd(m.status.version)
 			}
 		} else {
 			if msg.hostIndex >= 0 && msg.hostIndex < len(m.rawHosts) {
@@ -57,9 +57,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case statusClearMsg:
-		if msg.version == m.statusVersion {
-			m.statusMessage = ""
-			m.statusIsError = false
+		if msg.version == m.status.version {
+			m.status.message = ""
+			m.status.isError = false
 		}
 		return m, nil
 	case tea.WindowSizeMsg:

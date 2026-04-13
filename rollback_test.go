@@ -253,7 +253,7 @@ func TestUpdateEnterRollsBackHistoryOnSaveError(t *testing.T) {
 	if len(got.history) != 0 {
 		t.Fatalf("history should be rolled back, got %+v", got.history)
 	}
-	if !got.statusIsError || !strings.Contains(got.statusMessage, "Failed to save history") {
-		t.Fatalf("expected visible history save error, got status=%q", got.statusMessage)
+	if !got.status.isError || !strings.Contains(got.status.message, "Failed to save history") {
+		t.Fatalf("expected visible history save error, got status=%q", got.status.message)
 	}
 }

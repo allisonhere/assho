@@ -135,12 +135,12 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err := m.save(); err != nil {
 				m.restoreSnapshot(snapshot)
 				m.state = stateList
-				m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
-				m.statusIsError = true
-				m.statusVersion++
+				m.status.message = fmt.Sprintf("Failed to save host deletion: %v", err)
+				m.status.isError = true
+				m.status.version++
 				m.form.deleteFocus = false
 				m.form.deleteArmed = false
-				return m, statusClearCmd(m.statusVersion)
+				return m, statusClearCmd(m.status.version)
 			}
 			m.state = stateList
 			m.form.deleteFocus = false
