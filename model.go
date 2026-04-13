@@ -42,13 +42,13 @@ const (
 	fieldHostname     = 1
 	fieldUser         = 2
 	fieldPort         = 3
-	fieldProxyJump    = 4
-	fieldLocalForward = 5
-	fieldKeyFile      = 6
-	fieldNotes        = 7
-	fieldPassword     = 8
-	fieldForwardAgent = 9
-	fieldGroup        = 10
+	fieldKeyFile      = 4
+	fieldPassword     = 5
+	fieldForwardAgent = 6
+	fieldProxyJump    = 7
+	fieldLocalForward = 8
+	fieldGroup        = 9
+	fieldNotes        = 10
 	fieldCount        = 11
 )
 
@@ -329,8 +329,8 @@ func countContainers(hosts []Host) int {
 
 func newFormInputs() []textinput.Model {
 	inputs := make([]textinput.Model, fieldCount)
-	labels := []string{"Alias", "Hostname", "User", "Port", "ProxyJump", "LocalFwd", "Key File", "Notes", "Password", "Fwd. Agent", "Group"}
-	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "user@bastion:port", "5432:localhost:5432", "optional key path", "optional note", "", "yes to enable (-A)", "optional group name"}
+	labels := []string{"Alias", "Hostname", "User", "Port", "Key File", "Password", "Fwd. Agent", "ProxyJump", "LocalFwd", "Group", "Notes"}
+	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "optional key path", "", "yes to enable (-A)", "user@bastion:port", "5432:localhost:5432", "optional group name", "optional note"}
 	for i := range inputs {
 		t := textinput.New()
 		t.Cursor.Style = lipgloss.NewStyle().Foreground(colorSecondary)
@@ -522,14 +522,8 @@ func (m *model) populateForm(h Host) {
 	m.form.inputs[fieldUser].CursorEnd()
 	m.form.inputs[fieldPort].SetValue(h.Port)
 	m.form.inputs[fieldPort].CursorEnd()
-	m.form.inputs[fieldProxyJump].SetValue(h.ProxyJump)
-	m.form.inputs[fieldProxyJump].CursorEnd()
-	m.form.inputs[fieldLocalForward].SetValue(h.LocalForward)
-	m.form.inputs[fieldLocalForward].CursorEnd()
 	m.form.inputs[fieldKeyFile].SetValue(h.IdentityFile)
 	m.form.inputs[fieldKeyFile].CursorEnd()
-	m.form.inputs[fieldNotes].SetValue(h.Notes)
-	m.form.inputs[fieldNotes].CursorEnd()
 	m.form.inputs[fieldPassword].SetValue(h.Password)
 	m.form.inputs[fieldPassword].CursorEnd()
 	if h.ForwardAgent {
@@ -538,6 +532,10 @@ func (m *model) populateForm(h Host) {
 		m.form.inputs[fieldForwardAgent].SetValue("")
 	}
 	m.form.inputs[fieldForwardAgent].CursorEnd()
+	m.form.inputs[fieldProxyJump].SetValue(h.ProxyJump)
+	m.form.inputs[fieldProxyJump].CursorEnd()
+	m.form.inputs[fieldLocalForward].SetValue(h.LocalForward)
+	m.form.inputs[fieldLocalForward].CursorEnd()
 	groupName := ""
 	if h.GroupID != "" {
 		if idx := findGroupIndexByID(m.rawGroups, h.GroupID); idx != -1 {
@@ -546,6 +544,8 @@ func (m *model) populateForm(h Host) {
 	}
 	m.buildGroupOptions(groupName)
 	m.form.inputs[fieldGroup].CursorEnd()
+	m.form.inputs[fieldNotes].SetValue(h.Notes)
+	m.form.inputs[fieldNotes].CursorEnd()
 }
 
 func (m *model) saveFromForm() error {

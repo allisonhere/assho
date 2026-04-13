@@ -72,7 +72,7 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 			m.form.keyPickFocus = false
-			m.form.focusIndex = fieldNotes
+			m.form.focusIndex = fieldPassword
 			return m, m.focusInputs()
 		}
 		m.form.focusIndex++
@@ -101,7 +101,7 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form.focusIndex = len(m.form.inputs) - 1
 			return m, m.focusInputs()
 		}
-		if m.form.focusIndex == fieldNotes {
+		if m.form.focusIndex == fieldPassword {
 			m.form.focusIndex = fieldKeyFile
 			m.form.keyPickFocus = true
 			return m, nil

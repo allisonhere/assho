@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -143,6 +144,45 @@ func TestPopulateFormNoGroup(t *testing.T) {
 
 	if got := m.form.inputs[fieldGroup].Value(); got != "(none)" {
 		t.Errorf("expected (none) for ungrouped host, got %q", got)
+	}
+}
+
+func TestRenderFormViewWideShowsReorganizedSections(t *testing.T) {
+	m := model{
+		width: 120,
+		form:  formState{inputs: newFormInputs()},
+	}
+	out := m.renderFormView()
+
+	for _, want := range []string{"ENDPOINT", "AUTH", "ADVANCED", "ORGANIZATION", "METADATA"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected form view to contain section %q", want)
+		}
+	}
+
+	if strings.Index(out, "ADVANCED") < strings.Index(out, "AUTH") {
+		t.Fatal("expected AUTH section to appear before ADVANCED")
+	}
+	if strings.Index(out, "METADATA") < strings.Index(out, "ORGANIZATION") {
+		t.Fatal("expected METADATA section to appear after ORGANIZATION")
+	}
+}
+
+func TestRenderFormViewPlacesNotesInMetadataSection(t *testing.T) {
+	m := model{
+		width: 90,
+		form:  formState{inputs: newFormInputs()},
+	}
+	m.form.inputs[fieldNotes].SetValue("prod DB")
+
+	out := m.renderFormView()
+	meta := strings.Index(out, "METADATA")
+	notes := strings.Index(out, "prod DB")
+	if meta == -1 || notes == -1 {
+		t.Fatalf("expected metadata section and notes value in output")
+	}
+	if notes < meta {
+		t.Fatal("expected notes to render inside or after the METADATA section")
 	}
 }
 

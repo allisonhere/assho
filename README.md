@@ -117,13 +117,17 @@ assho test <alias>       # test connectivity, exits 0/1
 |---|---|
 | `Tab` / `↓` | Next field |
 | `Shift+Tab` / `↑` | Previous field |
-| `Enter` | Advance to next field, or save on the last field |
-| `Enter` | Open file picker (when Key File field is focused) |
+| `Enter` | Advance to next field, or save on the `Notes` field |
+| `Enter` | Open file picker (when the `Pick` control beside `Key File` is focused) |
 | `←` / `→` | Cycle group selection |
-| `Ctrl+T` | Test connection |
+| `Ctrl+T` | Test connection and show status in the form sidebar |
 | `Esc` | Cancel |
 
+On wider terminals, the add/edit screen renders as a main form with a side panel for actions and status. On narrower terminals, it falls back to a stacked layout.
+
 ### Form Fields
+
+#### ENDPOINT
 
 | Field | Description |
 |---|---|
@@ -131,13 +135,33 @@ assho test <alias>       # test connectivity, exits 0/1
 | Hostname | IP address or hostname |
 | User | SSH username |
 | Port | SSH port (default: 22) |
-| ProxyJump | Jump host in `[user@]host[:port]` format, passed to SSH's `-J` |
-| LocalFwd | Port tunnel in `local:host:remote` format, passed to SSH's `-L` |
+
+#### AUTH
+
+| Field | Description |
+|---|---|
 | Key File | Path to identity file; use the `Pick` button to browse |
-| Notes | Free-text note shown in the host list |
 | Password | Stored in your OS keychain, not in the config file |
 | Fwd. Agent | Set to `yes` to enable SSH agent forwarding (`-A`) |
+
+#### ADVANCED
+
+| Field | Description |
+|---|---|
+| ProxyJump | Jump host in `[user@]host[:port]` format, passed to SSH's `-J` |
+| LocalFwd | Port tunnel in `local:host:remote` format, passed to SSH's `-L` |
+
+#### ORGANIZATION
+
+| Field | Description |
+|---|---|
 | Group | Assign to an existing group or create a new one |
+
+#### METADATA
+
+| Field | Description |
+|---|---|
+| Notes | Free-text note shown in the host list |
 
 ## Configuration
 

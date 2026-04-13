@@ -207,9 +207,9 @@ func renderListHelp(selected list.Item) string {
 func renderFormHelp() string {
 	entries := []string{
 		helpEntry("tab", "next"),
-		helpEntry("enter", "save"),
+		helpEntry("enter", "next/save"),
 		helpEntry("ctrl+t", "test conn"),
-		helpEntry("[pick]", "key file"),
+		helpEntry("pick", "key file"),
 		helpEntry("←→", "group"),
 		helpEntry("esc", "cancel"),
 	}

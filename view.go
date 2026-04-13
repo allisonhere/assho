@@ -88,9 +88,20 @@ func (m model) renderListView() string {
 }
 
 func (m model) renderAboutView() string {
-	base := m.renderListView()
+	base := dimBase(m.renderListView())
 	modal := renderAboutModal(m.about.frame)
 	return overlayCenter(base, modal, m.width, m.height)
+}
+
+// dimBase strips existing ANSI styling from each line and re-renders it in a
+// muted gray, producing a scrim effect for modal overlays.
+func dimBase(s string) string {
+	dim := lipgloss.NewStyle().Foreground(colorMuted)
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = dim.Render(ansi.Strip(l))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // overlayCenter composites modal lines centered over base lines. Base lines
@@ -176,42 +187,96 @@ func (m model) renderGroupPromptView() string {
 }
 
 func (m model) renderFormView() string {
-	var formTitle string
-	if m.form.selectedHost == nil {
-		formTitle = formTitleStyle.Render("✨ New Session")
-	} else {
-		formTitle = formTitleStyle.Render("✎ Edit Session")
+	available := 72
+	if m.width > 0 {
+		available = m.width - 8
+	}
+	if available < 44 {
+		available = 44
 	}
 
-	formWidth := 60
-	if m.width > 0 {
-		available := m.width - 8 // subtract appStyle padding + border
-		if available < 40 {
-			available = 40
+	var content string
+	if available >= 96 {
+		mainWidth := available - 28
+		if mainWidth < 54 {
+			mainWidth = 54
 		}
-		if available < formWidth {
-			formWidth = available
+		sidebarWidth := available - mainWidth - 2
+		if sidebarWidth < 24 {
+			sidebarWidth = 24
+			mainWidth = available - sidebarWidth - 2
 		}
+		content = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			m.renderFormMainPanel(mainWidth),
+			"  ",
+			m.renderFormSidebar(sidebarWidth),
+		)
+	} else {
+		mainWidth := available
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.renderFormTitle(),
+			m.renderFormMainPanel(mainWidth),
+			m.renderFormSidebar(mainWidth),
+		)
 	}
-	dividerWidth := formWidth - 4
+
+	help := "\n" + renderFormHelp()
+	return appStyle.Render(content + help)
+}
+
+func (m model) renderFormTitle() string {
+	if m.form.selectedHost == nil {
+		return formTitleStyle.Render("✨ New Session")
+	}
+	return formTitleStyle.Render("✎ Edit Session")
+}
+
+func (m model) renderFormMainPanel(width int) string {
+	var b strings.Builder
+	b.WriteString(m.renderFormSection("ENDPOINT", width,
+		m.form.inputs[fieldAlias].View(),
+		m.form.inputs[fieldHostname].View(),
+		m.form.inputs[fieldUser].View(),
+		m.form.inputs[fieldPort].View(),
+	))
+	b.WriteString("\n\n")
+	b.WriteString(m.renderFormSection("AUTH", width,
+		m.renderKeyFileRow(),
+		m.form.inputs[fieldPassword].View(),
+		m.form.inputs[fieldForwardAgent].View(),
+	))
+	b.WriteString("\n\n")
+	b.WriteString(m.renderFormSection("ADVANCED", width,
+		m.form.inputs[fieldProxyJump].View(),
+		m.form.inputs[fieldLocalForward].View(),
+	))
+	b.WriteString("\n\n")
+	b.WriteString(m.renderFormSection("ORGANIZATION", width, m.renderGroupRow()))
+	b.WriteString("\n\n")
+	b.WriteString(m.renderFormSection("METADATA", width, m.form.inputs[fieldNotes].View()))
+	return formBoxStyle.Width(width).Render(b.String())
+}
+
+func (m model) renderFormSection(title string, width int, rows ...string) string {
+	dividerWidth := width - 6
 	if dividerWidth < 8 {
 		dividerWidth = 8
 	}
-	divider := formDividerStyle.Render(strings.Repeat("─", dividerWidth))
-	activeFormBoxStyle := formBoxStyle.Width(formWidth)
-
 	var b strings.Builder
-	b.WriteString(formTitle + "\n\n")
-
-	b.WriteString(formSectionStyle.Render("  CONNECTION") + "\n")
-	b.WriteString(divider + "\n")
-	for i := 0; i < 6; i++ {
-		b.WriteString(m.form.inputs[i].View() + "\n")
+	b.WriteString(formSectionStyle.Render("  "+title) + "\n")
+	b.WriteString(formDividerStyle.Render(strings.Repeat("─", dividerWidth)) + "\n")
+	for i, row := range rows {
+		b.WriteString(row)
+		if i < len(rows)-1 {
+			b.WriteString("\n")
+		}
 	}
+	return b.String()
+}
 
-	b.WriteString("\n")
-	b.WriteString(formSectionStyle.Render("  AUTHENTICATION") + "\n")
-	b.WriteString(divider + "\n")
+func (m model) renderKeyFileRow() string {
 	pickStyle := lipgloss.NewStyle().
 		Foreground(colorText).
 		Background(colorSecondary).
@@ -220,31 +285,55 @@ func (m model) renderFormView() string {
 	if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 		pickStyle = pickStyle.Background(colorPrimary)
 	}
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.form.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
-	b.WriteString(m.form.inputs[fieldNotes].View() + "\n")
-	b.WriteString(m.form.inputs[fieldPassword].View() + "\n")
-	b.WriteString(m.form.inputs[fieldForwardAgent].View() + "\n")
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.form.inputs[fieldKeyFile].View(),
+		"  ",
+		pickStyle.Render("Pick"),
+	)
+}
 
-	b.WriteString("\n")
-	b.WriteString(formSectionStyle.Render("  GROUPS") + "\n")
-	b.WriteString(divider + "\n")
+func (m model) renderGroupRow() string {
 	if m.form.groupCustom {
-		b.WriteString(m.form.inputs[fieldGroup].View() + "\n")
+		return m.form.inputs[fieldGroup].View()
+	}
+	groupLabelStyle := lipgloss.NewStyle().Foreground(colorMuted)
+	groupValueStyle := lipgloss.NewStyle().Foreground(colorDimText)
+	if m.form.focusIndex == fieldGroup {
+		groupLabelStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
+		groupValueStyle = lipgloss.NewStyle().Foreground(colorText)
+	}
+	groupValue := "(none)"
+	if len(m.form.groupOptions) > 0 {
+		groupValue = m.form.groupOptions[m.form.groupIndex]
+	}
+	return groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶")
+}
+
+func (m model) renderFormSidebar(width int) string {
+	var b strings.Builder
+	b.WriteString(m.renderFormTitle() + "\n\n")
+	if m.form.selectedHost == nil {
+		b.WriteString(formHintStyle.Render("Create a new SSH session profile.") + "\n")
 	} else {
-		groupLabelStyle := lipgloss.NewStyle().Foreground(colorMuted)
-		groupValueStyle := lipgloss.NewStyle().Foreground(colorDimText)
-		if m.form.focusIndex == fieldGroup {
-			groupLabelStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
-			groupValueStyle = lipgloss.NewStyle().Foreground(colorText)
-		}
-		groupValue := "(none)"
-		if len(m.form.groupOptions) > 0 {
-			groupValue = m.form.groupOptions[m.form.groupIndex]
-		}
-		b.WriteString(groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶") + "\n")
+		b.WriteString(formHintStyle.Render("Editing "+m.form.selectedHost.Alias) + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(formSectionStyle.Render("  ACTIONS") + "\n")
+	b.WriteString(formDividerStyle.Render(strings.Repeat("─", max(width-6, 8))) + "\n")
+	b.WriteString("  " + helpKeyStyle.Render("Ctrl+T") + " " + helpDescStyle.Render("test connection") + "\n")
+	b.WriteString("  " + helpKeyStyle.Render("Enter") + " " + helpDescStyle.Render("next field / save on Notes") + "\n")
+	b.WriteString("  " + helpKeyStyle.Render("Esc") + " " + helpDescStyle.Render("cancel") + "\n")
+
+	if status := m.renderFormStatus(); status != "" {
+		b.WriteString("\n")
+		b.WriteString(formSectionStyle.Render("  STATUS") + "\n")
+		b.WriteString(formDividerStyle.Render(strings.Repeat("─", max(width-6, 8))) + "\n")
+		b.WriteString(status + "\n")
 	}
 
 	if m.form.selectedHost != nil {
+		b.WriteString("\n")
 		label := "Delete Host"
 		if m.form.deleteArmed {
 			label = "Press Enter to Confirm Delete"
@@ -260,29 +349,36 @@ func (m model) renderFormView() string {
 				Background(colorSubtle).
 				Padding(0, 1)
 		}
-		b.WriteString("\n  " + deleteStyle.Render(label) + "\n")
+		b.WriteString("  " + deleteStyle.Render(label))
 		if m.form.deleteArmed {
-			b.WriteString("  " + formHintStyle.Render("Esc to cancel") + "\n")
+			b.WriteString("\n  " + formHintStyle.Render("Esc to cancel"))
 		}
 	}
 
+	return formBoxStyle.Width(width).Render(b.String())
+}
+
+func (m model) renderFormStatus() string {
 	if m.form.testing {
-		b.WriteString("\n " + m.spinner.View() + " " +
-			testPendingStyle.Render("Testing connection..."))
-	} else if m.form.testStatus != "" {
-		if m.form.testResult {
-			b.WriteString("\n  " + testSuccessStyle.Render("✔ "+m.form.testStatus))
-		} else {
-			b.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.testStatus))
-		}
+		return " " + m.spinner.View() + " " + testPendingStyle.Render("Testing connection...")
 	}
 	if m.form.formError != "" {
-		b.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.formError))
+		return "  " + testFailStyle.Render("✘ "+m.form.formError)
 	}
+	if m.form.testStatus != "" {
+		if m.form.testResult {
+			return "  " + testSuccessStyle.Render("✔ "+m.form.testStatus)
+		}
+		return "  " + testFailStyle.Render("✘ "+m.form.testStatus)
+	}
+	return ""
+}
 
-	form := activeFormBoxStyle.Render(b.String())
-	help := "\n" + renderFormHelp()
-	return appStyle.Render(form + help)
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func renderLogo(frame int) string {
