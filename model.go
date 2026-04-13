@@ -53,40 +53,44 @@ const (
 )
 
 type model struct {
-	list            list.Model
-	rawGroups       []Group
-	rawHosts        []Host // Source of truth for tree structure
-	inputs          []textinput.Model
-	groupPrompt     groupPromptState
-	filepicker      filepicker.Model
-	spinner         spinner.Model
-	focusIndex      int
-	state           state
-	selectedHost    *Host // For editing
-	err             error
-	quitting        bool
-	sshToRun        *Host  // If set, will exec ssh on quit
-	testStatus      string // Status message for connection test
-	testResult      bool   // true = success, false = failure
-	scanning        bool   // true while Docker scan in progress
-	testing         bool   // true while connection test in progress
-	width           int    // terminal width
-	height          int    // terminal height
-	formError       string // inline form validation/action error
-	keyPickFocus    bool   // true when [Pick] button on key field is focused
-	groupOptions    []string
-	groupIndex      int
-	groupCustom     bool
-	deleteFocus     bool // true when Delete Host button is focused in edit form
-	deleteArmed     bool   // true when delete confirmation is armed
-	listDelete      listDeleteState
-	statusMessage   string
-	statusIsError   bool
-	statusVersion   int
-	history         []HistoryEntry
-	historyList     list.Model
-	about           aboutState
-	headerFrame     int
+	list          list.Model
+	rawGroups     []Group
+	rawHosts      []Host // Source of truth for tree structure
+	form          formState
+	groupPrompt   groupPromptState
+	filepicker    filepicker.Model
+	spinner       spinner.Model
+	state         state
+	err           error
+	quitting      bool
+	sshToRun      *Host // If set, will exec ssh on quit
+	scanning      bool  // true while Docker scan in progress
+	width         int   // terminal width
+	height        int   // terminal height
+	listDelete    listDeleteState
+	statusMessage string
+	statusIsError bool
+	statusVersion int
+	history       []HistoryEntry
+	historyList   list.Model
+	about         aboutState
+	headerFrame   int
+}
+
+type formState struct {
+	inputs       []textinput.Model
+	focusIndex   int
+	selectedHost *Host  // For editing
+	formError    string // inline form validation/action error
+	keyPickFocus bool   // true when [Pick] button on key field is focused
+	deleteFocus  bool   // true when Delete Host button is focused
+	deleteArmed  bool   // true when delete confirmation is armed
+	testStatus   string // Status message for connection test
+	testResult   bool   // true = success, false = failure
+	testing      bool   // true while connection test in progress
+	groupOptions []string
+	groupIndex   int
+	groupCustom  bool
 }
 
 type groupPromptState struct {
@@ -407,7 +411,7 @@ func initialModel() model {
 		list:        l,
 		rawGroups:   groups,
 		rawHosts:    hosts,
-		inputs:      inputs,
+		form:        formState{inputs: inputs},
 		groupPrompt: groupPromptState{input: groupInput},
 		filepicker:  fp,
 		spinner:     sp,
@@ -468,68 +472,68 @@ func findGroupByName(groups []Group, name string) int {
 // --- Model Methods ---
 
 func (m *model) focusInputs() tea.Cmd {
-	cmds := make([]tea.Cmd, len(m.inputs))
-	m.deleteFocus = false
-	m.deleteArmed = false
-	for i := 0; i < len(m.inputs); i++ {
-		if i == m.focusIndex {
-			m.keyPickFocus = false
-			cmds[i] = m.inputs[i].Focus()
+	cmds := make([]tea.Cmd, len(m.form.inputs))
+	m.form.deleteFocus = false
+	m.form.deleteArmed = false
+	for i := 0; i < len(m.form.inputs); i++ {
+		if i == m.form.focusIndex {
+			m.form.keyPickFocus = false
+			cmds[i] = m.form.inputs[i].Focus()
 			// Put cursor at end so editing existing values behaves naturally.
-			m.inputs[i].CursorEnd()
-			m.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
-			m.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
+			m.form.inputs[i].CursorEnd()
+			m.form.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
+			m.form.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
 		} else {
-			m.inputs[i].Blur()
-			m.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorMuted)
-			m.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
+			m.form.inputs[i].Blur()
+			m.form.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorMuted)
+			m.form.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
 		}
 	}
 	return tea.Batch(cmds...)
 }
 
 func (m *model) resetForm() {
-	m.focusIndex = 0
-	m.formError = ""
-	m.keyPickFocus = false
-	m.deleteFocus = false
-	m.deleteArmed = false
-	for i := range m.inputs {
-		m.inputs[i].Reset()
-		m.inputs[i].Blur()
+	m.form.focusIndex = 0
+	m.form.formError = ""
+	m.form.keyPickFocus = false
+	m.form.deleteFocus = false
+	m.form.deleteArmed = false
+	for i := range m.form.inputs {
+		m.form.inputs[i].Reset()
+		m.form.inputs[i].Blur()
 	}
 	// New host defaults.
-	m.inputs[fieldPort].SetValue("22")
-	m.inputs[fieldPort].CursorEnd()
-	m.inputs[fieldAlias].Focus()
+	m.form.inputs[fieldPort].SetValue("22")
+	m.form.inputs[fieldPort].CursorEnd()
+	m.form.inputs[fieldAlias].Focus()
 }
 
 func (m *model) populateForm(h Host) {
 	m.resetForm()
-	m.inputs[fieldAlias].SetValue(h.Alias)
-	m.inputs[fieldAlias].CursorEnd()
-	m.inputs[fieldHostname].SetValue(h.Hostname)
-	m.inputs[fieldHostname].CursorEnd()
-	m.inputs[fieldUser].SetValue(h.User)
-	m.inputs[fieldUser].CursorEnd()
-	m.inputs[fieldPort].SetValue(h.Port)
-	m.inputs[fieldPort].CursorEnd()
-	m.inputs[fieldProxyJump].SetValue(h.ProxyJump)
-	m.inputs[fieldProxyJump].CursorEnd()
-	m.inputs[fieldLocalForward].SetValue(h.LocalForward)
-	m.inputs[fieldLocalForward].CursorEnd()
-	m.inputs[fieldKeyFile].SetValue(h.IdentityFile)
-	m.inputs[fieldKeyFile].CursorEnd()
-	m.inputs[fieldNotes].SetValue(h.Notes)
-	m.inputs[fieldNotes].CursorEnd()
-	m.inputs[fieldPassword].SetValue(h.Password)
-	m.inputs[fieldPassword].CursorEnd()
+	m.form.inputs[fieldAlias].SetValue(h.Alias)
+	m.form.inputs[fieldAlias].CursorEnd()
+	m.form.inputs[fieldHostname].SetValue(h.Hostname)
+	m.form.inputs[fieldHostname].CursorEnd()
+	m.form.inputs[fieldUser].SetValue(h.User)
+	m.form.inputs[fieldUser].CursorEnd()
+	m.form.inputs[fieldPort].SetValue(h.Port)
+	m.form.inputs[fieldPort].CursorEnd()
+	m.form.inputs[fieldProxyJump].SetValue(h.ProxyJump)
+	m.form.inputs[fieldProxyJump].CursorEnd()
+	m.form.inputs[fieldLocalForward].SetValue(h.LocalForward)
+	m.form.inputs[fieldLocalForward].CursorEnd()
+	m.form.inputs[fieldKeyFile].SetValue(h.IdentityFile)
+	m.form.inputs[fieldKeyFile].CursorEnd()
+	m.form.inputs[fieldNotes].SetValue(h.Notes)
+	m.form.inputs[fieldNotes].CursorEnd()
+	m.form.inputs[fieldPassword].SetValue(h.Password)
+	m.form.inputs[fieldPassword].CursorEnd()
 	if h.ForwardAgent {
-		m.inputs[fieldForwardAgent].SetValue("yes")
+		m.form.inputs[fieldForwardAgent].SetValue("yes")
 	} else {
-		m.inputs[fieldForwardAgent].SetValue("")
+		m.form.inputs[fieldForwardAgent].SetValue("")
 	}
-	m.inputs[fieldForwardAgent].CursorEnd()
+	m.form.inputs[fieldForwardAgent].CursorEnd()
 	groupName := ""
 	if h.GroupID != "" {
 		if idx := findGroupIndexByID(m.rawGroups, h.GroupID); idx != -1 {
@@ -537,21 +541,21 @@ func (m *model) populateForm(h Host) {
 		}
 	}
 	m.buildGroupOptions(groupName)
-	m.inputs[fieldGroup].CursorEnd()
+	m.form.inputs[fieldGroup].CursorEnd()
 }
 
 func (m *model) saveFromForm() error {
 	snapshot := m.snapshot()
 
-	alias := strings.TrimSpace(m.inputs[fieldAlias].Value())
+	alias := strings.TrimSpace(m.form.inputs[fieldAlias].Value())
 	if alias == "" {
 		return fmt.Errorf("alias is required")
 	}
-	hostname := strings.TrimSpace(m.inputs[fieldHostname].Value())
+	hostname := strings.TrimSpace(m.form.inputs[fieldHostname].Value())
 	if hostname == "" {
 		return fmt.Errorf("hostname is required")
 	}
-	if portStr := strings.TrimSpace(m.inputs[fieldPort].Value()); portStr != "" {
+	if portStr := strings.TrimSpace(m.form.inputs[fieldPort].Value()); portStr != "" {
 		n, err := strconv.Atoi(portStr)
 		if err != nil || n < 1 || n > 65535 {
 			return fmt.Errorf("port must be a number between 1 and 65535")
@@ -559,30 +563,30 @@ func (m *model) saveFromForm() error {
 	}
 	for i := range m.rawHosts {
 		if strings.EqualFold(strings.TrimSpace(m.rawHosts[i].Alias), alias) {
-			if m.selectedHost == nil || m.rawHosts[i].ID != m.selectedHost.ID {
+			if m.form.selectedHost == nil || m.rawHosts[i].ID != m.form.selectedHost.ID {
 				return fmt.Errorf("alias already exists: %s", alias)
 			}
 		}
 	}
 
-	fwdAgent := strings.ToLower(strings.TrimSpace(m.inputs[fieldForwardAgent].Value()))
+	fwdAgent := strings.ToLower(strings.TrimSpace(m.form.inputs[fieldForwardAgent].Value()))
 	newHost := Host{
 		ID:           "",
 		Alias:        alias,
 		Hostname:     hostname,
-		User:         m.inputs[fieldUser].Value(),
-		Port:         m.inputs[fieldPort].Value(),
-		ProxyJump:    m.inputs[fieldProxyJump].Value(),
-		LocalForward: m.inputs[fieldLocalForward].Value(),
-		IdentityFile: m.inputs[fieldKeyFile].Value(),
-		Notes:        m.inputs[fieldNotes].Value(),
-		Password:     m.inputs[fieldPassword].Value(),
+		User:         m.form.inputs[fieldUser].Value(),
+		Port:         m.form.inputs[fieldPort].Value(),
+		ProxyJump:    m.form.inputs[fieldProxyJump].Value(),
+		LocalForward: m.form.inputs[fieldLocalForward].Value(),
+		IdentityFile: m.form.inputs[fieldKeyFile].Value(),
+		Notes:        m.form.inputs[fieldNotes].Value(),
+		Password:     m.form.inputs[fieldPassword].Value(),
 		ForwardAgent: fwdAgent == "yes" || fwdAgent == "1" || fwdAgent == "true",
 	}
-	groupName := strings.TrimSpace(m.inputs[fieldGroup].Value())
-	if !m.groupCustom {
-		if len(m.groupOptions) > 0 {
-			selected := m.groupOptions[m.groupIndex]
+	groupName := strings.TrimSpace(m.form.inputs[fieldGroup].Value())
+	if !m.form.groupCustom {
+		if len(m.form.groupOptions) > 0 {
+			selected := m.form.groupOptions[m.form.groupIndex]
 			if selected == "(none)" {
 				groupName = ""
 			} else if selected == "+ New group..." {
@@ -610,10 +614,10 @@ func (m *model) saveFromForm() error {
 		newHost.GroupID = m.rawGroups[groupIdx].ID
 	}
 
-	if m.selectedHost != nil {
+	if m.form.selectedHost != nil {
 		// Update existing
 		for i, h := range m.rawHosts {
-			if h.ID == m.selectedHost.ID {
+			if h.ID == m.form.selectedHost.ID {
 				// Preserve containers/expanded/pinned state
 				newHost.ID = h.ID
 				newHost.Containers = h.Containers
@@ -680,47 +684,47 @@ func (m *model) rebuildHistoryList() {
 }
 
 func (m *model) buildGroupOptions(selectedName string) {
-	m.groupOptions = []string{"(none)"}
+	m.form.groupOptions = []string{"(none)"}
 	for i := range m.rawGroups {
-		m.groupOptions = append(m.groupOptions, m.rawGroups[i].Name)
+		m.form.groupOptions = append(m.form.groupOptions, m.rawGroups[i].Name)
 	}
-	m.groupOptions = append(m.groupOptions, "+ New group...")
-	m.groupIndex = 0
-	m.groupCustom = false
+	m.form.groupOptions = append(m.form.groupOptions, "+ New group...")
+	m.form.groupIndex = 0
+	m.form.groupCustom = false
 
 	target := strings.TrimSpace(selectedName)
 	if target == "" {
-		m.inputs[fieldGroup].SetValue("(none)")
+		m.form.inputs[fieldGroup].SetValue("(none)")
 		return
 	}
-	for i, opt := range m.groupOptions {
+	for i, opt := range m.form.groupOptions {
 		if strings.EqualFold(opt, target) {
-			m.groupIndex = i
-			m.inputs[fieldGroup].SetValue(opt)
+			m.form.groupIndex = i
+			m.form.inputs[fieldGroup].SetValue(opt)
 			return
 		}
 	}
 	// Unknown group name: switch to custom mode with the provided name.
-	m.groupCustom = true
-	m.groupIndex = len(m.groupOptions) - 1
-	m.inputs[fieldGroup].SetValue(target)
+	m.form.groupCustom = true
+	m.form.groupIndex = len(m.form.groupOptions) - 1
+	m.form.inputs[fieldGroup].SetValue(target)
 }
 
 func (m *model) applyGroupSelectionToInput() {
-	if m.groupCustom {
+	if m.form.groupCustom {
 		return
 	}
-	if len(m.groupOptions) == 0 {
-		m.inputs[fieldGroup].SetValue("(none)")
+	if len(m.form.groupOptions) == 0 {
+		m.form.inputs[fieldGroup].SetValue("(none)")
 		return
 	}
-	if m.groupIndex < 0 {
-		m.groupIndex = 0
+	if m.form.groupIndex < 0 {
+		m.form.groupIndex = 0
 	}
-	if m.groupIndex >= len(m.groupOptions) {
-		m.groupIndex = len(m.groupOptions) - 1
+	if m.form.groupIndex >= len(m.form.groupOptions) {
+		m.form.groupIndex = len(m.form.groupOptions) - 1
 	}
-	m.inputs[fieldGroup].SetValue(m.groupOptions[m.groupIndex])
+	m.form.inputs[fieldGroup].SetValue(m.form.groupOptions[m.form.groupIndex])
 }
 
 func (m *model) deleteGroupByID(groupID string) error {
@@ -749,7 +753,7 @@ func (m *model) openGroupPrompt(action, targetID, initialName string) {
 	m.state = stateGroupPrompt
 	m.groupPrompt.action = action
 	m.groupPrompt.target = targetID
-	m.formError = ""
+	m.form.formError = ""
 	m.groupPrompt.input.Reset()
 	m.groupPrompt.input.SetValue(initialName)
 	m.groupPrompt.input.CursorEnd()

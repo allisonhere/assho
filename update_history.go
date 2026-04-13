@@ -38,13 +38,13 @@ func (m model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx != -1 {
 				m.state = stateForm
 				h := m.rawHosts[idx]
-				m.selectedHost = &h
-				m.inputs = newFormInputs()
+				m.form.selectedHost = &h
+				m.form.inputs = newFormInputs()
 				m.populateForm(h)
-				m.formError = ""
-				m.keyPickFocus = false
-				m.deleteFocus = false
-				m.deleteArmed = false
+				m.form.formError = ""
+				m.form.keyPickFocus = false
+				m.form.deleteFocus = false
+				m.form.deleteArmed = false
 				return m, m.focusInputs()
 			}
 		}

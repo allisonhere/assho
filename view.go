@@ -103,7 +103,7 @@ func (m model) View() string {
 	}
 	// Form View
 	var formTitle string
-	if m.selectedHost == nil {
+	if m.form.selectedHost == nil {
 		formTitle = formTitleStyle.Render("✨ New Session")
 	} else {
 		formTitle = formTitleStyle.Render("✎ Edit Session")
@@ -134,7 +134,7 @@ func (m model) View() string {
 	formContent.WriteString(formSectionStyle.Render("  CONNECTION") + "\n")
 	formContent.WriteString(divider + "\n")
 	for i := 0; i < 6; i++ {
-		formContent.WriteString(m.inputs[i].View() + "\n")
+		formContent.WriteString(m.form.inputs[i].View() + "\n")
 	}
 
 	formContent.WriteString("\n")
@@ -146,36 +146,36 @@ func (m model) View() string {
 		Background(colorSecondary).
 		Bold(true).
 		Padding(0, 1)
-	if m.focusIndex == fieldKeyFile && m.keyPickFocus {
+	if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 		pickStyle = pickStyle.Background(colorPrimary)
 	}
-	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
-	formContent.WriteString(m.inputs[fieldNotes].View() + "\n")
-	formContent.WriteString(m.inputs[fieldPassword].View() + "\n")
-	formContent.WriteString(m.inputs[fieldForwardAgent].View() + "\n")
+	formContent.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, m.form.inputs[fieldKeyFile].View(), "  ", pickStyle.Render("Pick")) + "\n")
+	formContent.WriteString(m.form.inputs[fieldNotes].View() + "\n")
+	formContent.WriteString(m.form.inputs[fieldPassword].View() + "\n")
+	formContent.WriteString(m.form.inputs[fieldForwardAgent].View() + "\n")
 
 	formContent.WriteString("\n")
 	formContent.WriteString(formSectionStyle.Render("  GROUPS") + "\n")
 	formContent.WriteString(divider + "\n")
-	if m.groupCustom {
-		formContent.WriteString(m.inputs[fieldGroup].View() + "\n")
+	if m.form.groupCustom {
+		formContent.WriteString(m.form.inputs[fieldGroup].View() + "\n")
 	} else {
 		groupLabelStyle := lipgloss.NewStyle().Foreground(colorMuted)
 		groupValueStyle := lipgloss.NewStyle().Foreground(colorDimText)
-		if m.focusIndex == fieldGroup {
+		if m.form.focusIndex == fieldGroup {
 			groupLabelStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
 			groupValueStyle = lipgloss.NewStyle().Foreground(colorText)
 		}
 		groupValue := "(none)"
-		if len(m.groupOptions) > 0 {
-			groupValue = m.groupOptions[m.groupIndex]
+		if len(m.form.groupOptions) > 0 {
+			groupValue = m.form.groupOptions[m.form.groupIndex]
 		}
 		formContent.WriteString(groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶") + "\n")
 	}
 
-	if m.selectedHost != nil {
+	if m.form.selectedHost != nil {
 		label := "Delete Host"
-		if m.deleteArmed {
+		if m.form.deleteArmed {
 			label = "Press Enter to Confirm Delete"
 		}
 		deleteStyle := lipgloss.NewStyle().
@@ -183,31 +183,31 @@ func (m model) View() string {
 			Background(colorDanger).
 			Bold(true).
 			Padding(0, 1)
-		if !m.deleteFocus {
+		if !m.form.deleteFocus {
 			deleteStyle = lipgloss.NewStyle().
 				Foreground(colorDimText).
 				Background(colorSubtle).
 				Padding(0, 1)
 		}
 		formContent.WriteString("\n  " + deleteStyle.Render(label) + "\n")
-		if m.deleteArmed {
+		if m.form.deleteArmed {
 			formContent.WriteString("  " + formHintStyle.Render("Esc to cancel") + "\n")
 		}
 	}
 
 	// Test status
-	if m.testing {
+	if m.form.testing {
 		formContent.WriteString("\n " + m.spinner.View() + " " +
 			testPendingStyle.Render("Testing connection..."))
-	} else if m.testStatus != "" {
-		if m.testResult {
-			formContent.WriteString("\n  " + testSuccessStyle.Render("✔ "+m.testStatus))
+	} else if m.form.testStatus != "" {
+		if m.form.testResult {
+			formContent.WriteString("\n  " + testSuccessStyle.Render("✔ "+m.form.testStatus))
 		} else {
-			formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.testStatus))
+			formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.testStatus))
 		}
 	}
-	if m.formError != "" {
-		formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.formError))
+	if m.form.formError != "" {
+		formContent.WriteString("\n  " + testFailStyle.Render("✘ "+m.form.formError))
 	}
 
 	form := activeFormBoxStyle.Render(formContent.String())

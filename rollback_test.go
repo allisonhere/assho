@@ -52,18 +52,18 @@ func TestSaveFromFormRollsBackOnSaveError(t *testing.T) {
 	m := model{
 		rawGroups:   originalGroups,
 		rawHosts:    originalHosts,
-		inputs:      newFormInputs(),
+		form:        formState{inputs: newFormInputs()},
 		historyList: newTestHistoryListModel(),
 	}
 	m.list = newTestListModel(m.rawGroups, m.rawHosts)
 	m.buildGroupOptions("")
 
-	m.inputs[fieldAlias].SetValue("api")
-	m.inputs[fieldHostname].SetValue("10.0.0.2")
-	m.inputs[fieldUser].SetValue("root")
-	m.inputs[fieldPort].SetValue("22")
-	m.inputs[fieldGroup].SetValue("staging")
-	m.groupCustom = true
+	m.form.inputs[fieldAlias].SetValue("api")
+	m.form.inputs[fieldHostname].SetValue("10.0.0.2")
+	m.form.inputs[fieldUser].SetValue("root")
+	m.form.inputs[fieldPort].SetValue("22")
+	m.form.inputs[fieldGroup].SetValue("staging")
+	m.form.groupCustom = true
 
 	if err := m.saveFromForm(); err == nil {
 		t.Fatal("expected saveFromForm to fail")

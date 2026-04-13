@@ -11,22 +11,22 @@ func (m model) updateFilePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		m.state = stateForm
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	}
 	var cmd tea.Cmd
 	m.filepicker, cmd = m.filepicker.Update(msg)
 	if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-		m.inputs[fieldKeyFile].SetValue(path)
-		m.inputs[fieldKeyFile].CursorEnd()
+		m.form.inputs[fieldKeyFile].SetValue(path)
+		m.form.inputs[fieldKeyFile].CursorEnd()
 		m.state = stateForm
-		m.keyPickFocus = false
+		m.form.keyPickFocus = false
 		return m, m.focusInputs()
 	} else if didSelect, _ := m.filepicker.DidSelectDisabledFile(msg); didSelect {
 		m.state = stateForm
-		m.keyPickFocus = false
+		m.form.keyPickFocus = false
 		return m, m.focusInputs()
 	}
 	return m, cmd
@@ -39,94 +39,94 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "ctrl+t":
 		h := Host{
-			Hostname:     m.inputs[fieldHostname].Value(),
-			User:         m.inputs[fieldUser].Value(),
-			Port:         m.inputs[fieldPort].Value(),
-			ProxyJump:    m.inputs[fieldProxyJump].Value(),
-			IdentityFile: m.inputs[fieldKeyFile].Value(),
-			Password:     m.inputs[fieldPassword].Value(),
+			Hostname:     m.form.inputs[fieldHostname].Value(),
+			User:         m.form.inputs[fieldUser].Value(),
+			Port:         m.form.inputs[fieldPort].Value(),
+			ProxyJump:    m.form.inputs[fieldProxyJump].Value(),
+			IdentityFile: m.form.inputs[fieldKeyFile].Value(),
+			Password:     m.form.inputs[fieldPassword].Value(),
 		}
-		m.testStatus = ""
-		m.testing = true
+		m.form.testStatus = ""
+		m.form.testing = true
 		return m, testConnection(h)
 	case "esc":
-		if m.deleteFocus && m.deleteArmed {
-			m.deleteArmed = false
+		if m.form.deleteFocus && m.form.deleteArmed {
+			m.form.deleteArmed = false
 			return m, nil
 		}
 		m.state = stateList
-		m.testStatus = ""
-		m.formError = ""
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.testStatus = ""
+		m.form.formError = ""
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, nil
 	case "tab", "down":
-		if m.deleteFocus {
-			m.deleteArmed = false
+		if m.form.deleteFocus {
+			m.form.deleteArmed = false
 			return m, nil
 		}
-		if m.focusIndex == fieldKeyFile && !m.keyPickFocus {
-			m.keyPickFocus = true
+		if m.form.focusIndex == fieldKeyFile && !m.form.keyPickFocus {
+			m.form.keyPickFocus = true
 			return m, nil
 		}
-		if m.focusIndex == fieldKeyFile && m.keyPickFocus {
-			m.keyPickFocus = false
-			m.focusIndex = fieldNotes
+		if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
+			m.form.keyPickFocus = false
+			m.form.focusIndex = fieldNotes
 			return m, m.focusInputs()
 		}
-		m.focusIndex++
-		if m.focusIndex >= len(m.inputs) {
-			if m.selectedHost != nil {
-				m.focusIndex = len(m.inputs) - 1
-				m.deleteFocus = true
-				m.deleteArmed = false
-				for i := range m.inputs {
-					m.inputs[i].Blur()
-					m.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorMuted)
-					m.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
+		m.form.focusIndex++
+		if m.form.focusIndex >= len(m.form.inputs) {
+			if m.form.selectedHost != nil {
+				m.form.focusIndex = len(m.form.inputs) - 1
+				m.form.deleteFocus = true
+				m.form.deleteArmed = false
+				for i := range m.form.inputs {
+					m.form.inputs[i].Blur()
+					m.form.inputs[i].PromptStyle = lipgloss.NewStyle().Foreground(colorMuted)
+					m.form.inputs[i].TextStyle = lipgloss.NewStyle().Foreground(colorText)
 				}
 				return m, nil
 			}
-			m.focusIndex = 0
+			m.form.focusIndex = 0
 		}
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	case "shift+tab", "up":
-		if m.deleteFocus {
-			m.deleteFocus = false
-			m.deleteArmed = false
-			m.focusIndex = len(m.inputs) - 1
+		if m.form.deleteFocus {
+			m.form.deleteFocus = false
+			m.form.deleteArmed = false
+			m.form.focusIndex = len(m.form.inputs) - 1
 			return m, m.focusInputs()
 		}
-		if m.focusIndex == fieldNotes {
-			m.focusIndex = fieldKeyFile
-			m.keyPickFocus = true
+		if m.form.focusIndex == fieldNotes {
+			m.form.focusIndex = fieldKeyFile
+			m.form.keyPickFocus = true
 			return m, nil
 		}
-		if m.focusIndex == fieldKeyFile && m.keyPickFocus {
-			m.keyPickFocus = false
+		if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
+			m.form.keyPickFocus = false
 			return m, m.focusInputs()
 		}
-		m.focusIndex--
-		if m.focusIndex < 0 {
-			m.focusIndex = len(m.inputs) - 1
+		m.form.focusIndex--
+		if m.form.focusIndex < 0 {
+			m.form.focusIndex = len(m.form.inputs) - 1
 		}
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	case "enter":
-		if m.deleteFocus && m.selectedHost != nil {
-			if !m.deleteArmed {
-				m.deleteArmed = true
+		if m.form.deleteFocus && m.form.selectedHost != nil {
+			if !m.form.deleteArmed {
+				m.form.deleteArmed = true
 				return m, nil
 			}
 			snapshot := m.snapshot()
 			for idx, h := range m.rawHosts {
-				if h.ID == m.selectedHost.ID {
+				if h.ID == m.form.selectedHost.ID {
 					m.rawHosts = append(m.rawHosts[:idx], m.rawHosts[idx+1:]...)
 					break
 				}
@@ -138,79 +138,79 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.statusMessage = fmt.Sprintf("Failed to save host deletion: %v", err)
 				m.statusIsError = true
 				m.statusVersion++
-				m.deleteFocus = false
-				m.deleteArmed = false
+				m.form.deleteFocus = false
+				m.form.deleteArmed = false
 				return m, statusClearCmd(m.statusVersion)
 			}
 			m.state = stateList
-			m.deleteFocus = false
-			m.deleteArmed = false
+			m.form.deleteFocus = false
+			m.form.deleteArmed = false
 			return m, nil
 		}
-		if m.focusIndex == fieldKeyFile && m.keyPickFocus {
+		if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 			m.state = stateFilePicker
-			m.keyPickFocus = false
+			m.form.keyPickFocus = false
 			return m, m.filepicker.Init()
 		}
-		if m.focusIndex == fieldGroup && !m.groupCustom {
-			if len(m.groupOptions) > 0 && m.groupOptions[m.groupIndex] == "+ New group..." {
-				m.groupCustom = true
-				m.inputs[fieldGroup].SetValue("")
-				m.inputs[fieldGroup].Placeholder = "new group name"
+		if m.form.focusIndex == fieldGroup && !m.form.groupCustom {
+			if len(m.form.groupOptions) > 0 && m.form.groupOptions[m.form.groupIndex] == "+ New group..." {
+				m.form.groupCustom = true
+				m.form.inputs[fieldGroup].SetValue("")
+				m.form.inputs[fieldGroup].Placeholder = "new group name"
 				return m, m.focusInputs()
 			}
 		}
-		if m.focusIndex == len(m.inputs)-1 {
+		if m.form.focusIndex == len(m.form.inputs)-1 {
 			if err := m.saveFromForm(); err != nil {
-				m.formError = err.Error()
+				m.form.formError = err.Error()
 				return m, nil
 			}
-			m.formError = ""
-			m.keyPickFocus = false
-			m.deleteFocus = false
-			m.deleteArmed = false
+			m.form.formError = ""
+			m.form.keyPickFocus = false
+			m.form.deleteFocus = false
+			m.form.deleteArmed = false
 			m.state = stateList
 			return m, nil
 		}
-		m.focusIndex++
-		m.formError = ""
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.focusIndex++
+		m.form.formError = ""
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	case "left":
-		if m.focusIndex == fieldGroup && !m.groupCustom {
-			if len(m.groupOptions) > 0 {
-				m.groupIndex--
-				if m.groupIndex < 0 {
-					m.groupIndex = len(m.groupOptions) - 1
+		if m.form.focusIndex == fieldGroup && !m.form.groupCustom {
+			if len(m.form.groupOptions) > 0 {
+				m.form.groupIndex--
+				if m.form.groupIndex < 0 {
+					m.form.groupIndex = len(m.form.groupOptions) - 1
 				}
 				m.applyGroupSelectionToInput()
 			}
 			return m, nil
 		}
 	case "right":
-		if m.focusIndex == fieldGroup && !m.groupCustom {
-			if len(m.groupOptions) > 0 {
-				m.groupIndex = (m.groupIndex + 1) % len(m.groupOptions)
+		if m.form.focusIndex == fieldGroup && !m.form.groupCustom {
+			if len(m.form.groupOptions) > 0 {
+				m.form.groupIndex = (m.form.groupIndex + 1) % len(m.form.groupOptions)
 				m.applyGroupSelectionToInput()
 			}
 			return m, nil
 		}
 	default:
-		if m.focusIndex == fieldKeyFile && m.keyPickFocus {
+		if m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus {
 			return m, nil
 		}
-		if m.deleteFocus {
-			m.deleteArmed = false
+		if m.form.deleteFocus {
+			m.form.deleteArmed = false
 			return m, nil
 		}
-		if m.focusIndex == fieldGroup && !m.groupCustom {
+		if m.form.focusIndex == fieldGroup && !m.form.groupCustom {
 			return m, nil
 		}
-		if m.focusIndex >= 0 && m.focusIndex < len(m.inputs) {
+		if m.form.focusIndex >= 0 && m.form.focusIndex < len(m.form.inputs) {
 			var cmd tea.Cmd
-			m.inputs[m.focusIndex], cmd = m.inputs[m.focusIndex].Update(msg)
+			m.form.inputs[m.form.focusIndex], cmd = m.form.inputs[m.form.focusIndex].Update(msg)
 			return m, cmd
 		}
 	}

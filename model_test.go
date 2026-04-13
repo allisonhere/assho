@@ -77,7 +77,7 @@ func TestFlattenAllPreservesIndent(t *testing.T) {
 func TestPopulateFormAllFields(t *testing.T) {
 	m := model{
 		rawGroups: []Group{{ID: "g1", Name: "prod"}},
-		inputs:    newFormInputs(),
+		form:      formState{inputs: newFormInputs()},
 	}
 	h := Host{
 		Alias:        "web",
@@ -106,7 +106,7 @@ func TestPopulateFormAllFields(t *testing.T) {
 		{fieldGroup, "prod", "Group"},
 	}
 	for _, c := range cases {
-		if got := m.inputs[c.field].Value(); got != c.want {
+		if got := m.form.inputs[c.field].Value(); got != c.want {
 			t.Errorf("field %s (index %d): got %q, want %q", c.name, c.field, got, c.want)
 		}
 	}
@@ -115,7 +115,7 @@ func TestPopulateFormAllFields(t *testing.T) {
 func TestPopulateFormMissingGroup(t *testing.T) {
 	m := model{
 		rawGroups: []Group{{ID: "g1", Name: "prod"}},
-		inputs:    newFormInputs(),
+		form:      formState{inputs: newFormInputs()},
 	}
 	h := Host{
 		Alias:    "orphan",
@@ -125,10 +125,10 @@ func TestPopulateFormMissingGroup(t *testing.T) {
 	m.populateForm(h)
 
 	// Deleted group → falls back to (none).
-	if got := m.inputs[fieldGroup].Value(); got != "(none)" {
+	if got := m.form.inputs[fieldGroup].Value(); got != "(none)" {
 		t.Errorf("expected (none) for missing group, got %q", got)
 	}
-	if m.groupCustom {
+	if m.form.groupCustom {
 		t.Error("expected groupCustom=false when group is simply missing")
 	}
 }
@@ -136,12 +136,12 @@ func TestPopulateFormMissingGroup(t *testing.T) {
 func TestPopulateFormNoGroup(t *testing.T) {
 	m := model{
 		rawGroups: []Group{{ID: "g1", Name: "prod"}},
-		inputs:    newFormInputs(),
+		form:      formState{inputs: newFormInputs()},
 	}
 	h := Host{Alias: "standalone", Hostname: "5.6.7.8"}
 	m.populateForm(h)
 
-	if got := m.inputs[fieldGroup].Value(); got != "(none)" {
+	if got := m.form.inputs[fieldGroup].Value(); got != "(none)" {
 		t.Errorf("expected (none) for ungrouped host, got %q", got)
 	}
 }

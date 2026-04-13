@@ -230,29 +230,29 @@ func TestGroupSelectionHelpers(t *testing.T) {
 			{ID: "g1", Name: "prod"},
 			{ID: "g2", Name: "staging"},
 		},
-		inputs: newFormInputs(),
+		form: formState{inputs: newFormInputs()},
 	}
 
 	m.buildGroupOptions("staging")
-	if m.groupCustom {
+	if m.form.groupCustom {
 		t.Fatal("expected known group to be non-custom mode")
 	}
-	if m.inputs[fieldGroup].Value() != "staging" {
-		t.Fatalf("expected selected group value 'staging', got %q", m.inputs[fieldGroup].Value())
+	if m.form.inputs[fieldGroup].Value() != "staging" {
+		t.Fatalf("expected selected group value 'staging', got %q", m.form.inputs[fieldGroup].Value())
 	}
 
-	m.groupIndex = -1
+	m.form.groupIndex = -1
 	m.applyGroupSelectionToInput()
-	if m.inputs[fieldGroup].Value() != "(none)" {
-		t.Fatalf("expected clamped group value '(none)', got %q", m.inputs[fieldGroup].Value())
+	if m.form.inputs[fieldGroup].Value() != "(none)" {
+		t.Fatalf("expected clamped group value '(none)', got %q", m.form.inputs[fieldGroup].Value())
 	}
 
-	m.groupCustom = true
-	m.inputs[fieldGroup].SetValue("custom")
-	m.groupIndex = 2
+	m.form.groupCustom = true
+	m.form.inputs[fieldGroup].SetValue("custom")
+	m.form.groupIndex = 2
 	m.applyGroupSelectionToInput()
-	if m.inputs[fieldGroup].Value() != "custom" {
-		t.Fatalf("expected custom value to remain unchanged, got %q", m.inputs[fieldGroup].Value())
+	if m.form.inputs[fieldGroup].Value() != "custom" {
+		t.Fatalf("expected custom value to remain unchanged, got %q", m.form.inputs[fieldGroup].Value())
 	}
 }
 
@@ -291,9 +291,9 @@ func TestSaveFromFormRequiresHostname(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("ASSHO_STORE_PASSWORD", "0")
 
-	m := model{inputs: newFormInputs(), historyList: newTestHistoryListModel()}
+	m := model{form: formState{inputs: newFormInputs()}, historyList: newTestHistoryListModel()}
 	m.list = newTestListModel(nil, nil)
-	m.inputs[fieldAlias].SetValue("web")
+	m.form.inputs[fieldAlias].SetValue("web")
 	// hostname left empty
 	m.buildGroupOptions("")
 	if err := m.saveFromForm(); err == nil {
@@ -318,11 +318,11 @@ func TestForwardAgentParsedFromForm(t *testing.T) {
 		{"no", false},
 	}
 	for _, tc := range cases {
-		m := model{inputs: newFormInputs(), historyList: newTestHistoryListModel()}
+		m := model{form: formState{inputs: newFormInputs()}, historyList: newTestHistoryListModel()}
 		m.list = newTestListModel(nil, nil)
-		m.inputs[fieldAlias].SetValue("srv")
-		m.inputs[fieldHostname].SetValue("10.0.0.1")
-		m.inputs[fieldForwardAgent].SetValue(tc.input)
+		m.form.inputs[fieldAlias].SetValue("srv")
+		m.form.inputs[fieldHostname].SetValue("10.0.0.1")
+		m.form.inputs[fieldForwardAgent].SetValue(tc.input)
 		m.buildGroupOptions("")
 		if err := m.saveFromForm(); err != nil {
 			t.Fatalf("unexpected error for input %q: %v", tc.input, err)
@@ -380,17 +380,17 @@ func TestSaveFromFormPortValidation(t *testing.T) {
 	t.Setenv("ASSHO_STORE_PASSWORD", "0")
 
 	newModel := func() model {
-		m := model{inputs: newFormInputs(), historyList: newTestHistoryListModel()}
+		m := model{form: formState{inputs: newFormInputs()}, historyList: newTestHistoryListModel()}
 		m.list = newTestListModel(nil, nil)
-		m.inputs[fieldAlias].SetValue("web")
-		m.inputs[fieldHostname].SetValue("10.0.0.1")
+		m.form.inputs[fieldAlias].SetValue("web")
+		m.form.inputs[fieldHostname].SetValue("10.0.0.1")
 		return m
 	}
 
 	invalidPorts := []string{"abc", "0", "65536", "-1", "99999"}
 	for _, p := range invalidPorts {
 		m := newModel()
-		m.inputs[fieldPort].SetValue(p)
+		m.form.inputs[fieldPort].SetValue(p)
 		if err := m.saveFromForm(); err == nil {
 			t.Errorf("expected error for invalid port %q, got nil", p)
 		}
@@ -399,7 +399,7 @@ func TestSaveFromFormPortValidation(t *testing.T) {
 	validPorts := []string{"", "22", "1", "65535", "2222"}
 	for _, p := range validPorts {
 		m := newModel()
-		m.inputs[fieldPort].SetValue(p)
+		m.form.inputs[fieldPort].SetValue(p)
 		if err := m.saveFromForm(); err != nil {
 			t.Errorf("expected no error for valid port %q, got: %v", p, err)
 		}
@@ -411,12 +411,12 @@ func TestNotesAndLocalForwardSavedFromForm(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("ASSHO_STORE_PASSWORD", "0")
 
-	m := model{inputs: newFormInputs(), historyList: newTestHistoryListModel()}
+	m := model{form: formState{inputs: newFormInputs()}, historyList: newTestHistoryListModel()}
 	m.list = newTestListModel(nil, nil)
-	m.inputs[fieldAlias].SetValue("srv")
-	m.inputs[fieldHostname].SetValue("10.0.0.1")
-	m.inputs[fieldNotes].SetValue("prod DB, ask Sam")
-	m.inputs[fieldLocalForward].SetValue("5432:localhost:5432")
+	m.form.inputs[fieldAlias].SetValue("srv")
+	m.form.inputs[fieldHostname].SetValue("10.0.0.1")
+	m.form.inputs[fieldNotes].SetValue("prod DB, ask Sam")
+	m.form.inputs[fieldLocalForward].SetValue("5432:localhost:5432")
 	m.buildGroupOptions("")
 
 	if err := m.saveFromForm(); err != nil {
@@ -458,11 +458,11 @@ func TestPinnedHostSavedFromForm(t *testing.T) {
 	existing := Host{ID: "h1", Alias: "srv", Hostname: "10.0.0.1", User: "root", Port: "22", Pinned: true}
 	m := model{
 		rawHosts:    []Host{existing},
-		inputs:      newFormInputs(),
+		form:        formState{inputs: newFormInputs()},
 		historyList: newTestHistoryListModel(),
 	}
 	m.list = newTestListModel(nil, m.rawHosts)
-	m.selectedHost = &existing
+	m.form.selectedHost = &existing
 	m.populateForm(existing)
 	m.buildGroupOptions("")
 

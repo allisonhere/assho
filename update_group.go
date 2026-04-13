@@ -13,19 +13,19 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateList
 		m.groupPrompt.action = ""
 		m.groupPrompt.target = ""
-		m.formError = ""
+		m.form.formError = ""
 		return m, nil
 	case "enter":
 		name := strings.TrimSpace(m.groupPrompt.input.Value())
 		if name == "" {
-			m.formError = "group name is required"
+			m.form.formError = "group name is required"
 			return m, nil
 		}
 		if idx := findGroupByName(m.rawGroups, name); idx != -1 {
 			if m.groupPrompt.action == "rename" && m.rawGroups[idx].ID == m.groupPrompt.target {
 				// no-op rename to same value
 			} else {
-				m.formError = "group name already exists"
+				m.form.formError = "group name already exists"
 				return m, nil
 			}
 		}
@@ -35,7 +35,7 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
 			if err := m.save(); err != nil {
 				m.restoreSnapshot(snapshot)
-				m.formError = fmt.Sprintf("failed to save group changes: %v", err)
+				m.form.formError = fmt.Sprintf("failed to save group changes: %v", err)
 				return m, nil
 			}
 		} else if m.groupPrompt.action == "rename" {
@@ -49,14 +49,14 @@ func (m model) updateGroupPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.list.SetItems(flattenHosts(m.rawGroups, m.rawHosts))
 			if err := m.save(); err != nil {
 				m.restoreSnapshot(snapshot)
-				m.formError = fmt.Sprintf("failed to save group changes: %v", err)
+				m.form.formError = fmt.Sprintf("failed to save group changes: %v", err)
 				return m, nil
 			}
 		}
 		m.state = stateList
 		m.groupPrompt.action = ""
 		m.groupPrompt.target = ""
-		m.formError = ""
+		m.form.formError = ""
 		return m, nil
 	default:
 		var cmd tea.Cmd

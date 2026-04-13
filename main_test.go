@@ -75,14 +75,14 @@ func TestFlattenHostsIndentation(t *testing.T) {
 func TestSaveFromFormRejectsDuplicateAlias(t *testing.T) {
 	m := model{
 		rawHosts: []Host{{ID: "h1", Alias: "web"}},
-		inputs:   newFormInputs(),
+		form:     formState{inputs: newFormInputs()},
 	}
-	m.inputs[0].SetValue("web")
-	m.inputs[1].SetValue("10.0.0.1")
-	m.inputs[2].SetValue("root")
-	m.inputs[3].SetValue("22")
-	m.inputs[4].SetValue("")
-	m.inputs[5].SetValue("")
+	m.form.inputs[0].SetValue("web")
+	m.form.inputs[1].SetValue("10.0.0.1")
+	m.form.inputs[2].SetValue("root")
+	m.form.inputs[3].SetValue("22")
+	m.form.inputs[4].SetValue("")
+	m.form.inputs[5].SetValue("")
 	m.buildGroupOptions("")
 
 	if err := m.saveFromForm(); err == nil {

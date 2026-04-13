@@ -25,8 +25,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, headerTick()
 	case testConnectionMsg:
-		m.testStatus, m.testResult = formatTestStatus(msg.err)
-		m.testing = false
+		m.form.testStatus, m.form.testResult = formatTestStatus(msg.err)
+		m.form.testing = false
 		return m, nil
 	case scanDockerMsg:
 		if !msg.background {
@@ -117,9 +117,9 @@ func (m model) forwardMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateFilePicker:
 		m.filepicker, cmd = m.filepicker.Update(msg)
 	case stateForm:
-		if m.focusIndex >= 0 && m.focusIndex < len(m.inputs) {
-			if !(m.focusIndex == fieldKeyFile && m.keyPickFocus) {
-				m.inputs[m.focusIndex], cmd = m.inputs[m.focusIndex].Update(msg)
+		if m.form.focusIndex >= 0 && m.form.focusIndex < len(m.form.inputs) {
+			if !(m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus) {
+				m.form.inputs[m.form.focusIndex], cmd = m.form.inputs[m.form.focusIndex].Update(msg)
 			}
 		}
 	case stateGroupPrompt:

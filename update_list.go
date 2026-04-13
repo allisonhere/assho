@@ -35,14 +35,14 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n":
 		m.clearListDeleteConfirm()
 		m.state = stateForm
-		m.selectedHost = nil
-		m.inputs = newFormInputs()
+		m.form.selectedHost = nil
+		m.form.inputs = newFormInputs()
 		m.resetForm()
 		m.buildGroupOptions("")
-		m.formError = ""
-		m.keyPickFocus = false
-		m.deleteFocus = false
-		m.deleteArmed = false
+		m.form.formError = ""
+		m.form.keyPickFocus = false
+		m.form.deleteFocus = false
+		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	case "enter", "space":
 		switch i := m.list.SelectedItem().(type) {
@@ -158,13 +158,13 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if i, ok := m.list.SelectedItem().(Host); ok && !i.IsContainer {
 			m.clearListDeleteConfirm()
 			m.state = stateForm
-			m.selectedHost = &i
-			m.inputs = newFormInputs()
+			m.form.selectedHost = &i
+			m.form.inputs = newFormInputs()
 			m.populateForm(i)
-			m.formError = ""
-			m.keyPickFocus = false
-			m.deleteFocus = false
-			m.deleteArmed = false
+			m.form.formError = ""
+			m.form.keyPickFocus = false
+			m.form.deleteFocus = false
+			m.form.deleteArmed = false
 			return m, m.focusInputs()
 		}
 	case "c":
@@ -175,13 +175,13 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			clone.Containers = nil
 			clone.Expanded = false
 			m.state = stateForm
-			m.selectedHost = nil
-			m.inputs = newFormInputs()
+			m.form.selectedHost = nil
+			m.form.inputs = newFormInputs()
 			m.populateForm(clone)
-			m.formError = ""
-			m.keyPickFocus = false
-			m.deleteFocus = false
-			m.deleteArmed = false
+			m.form.formError = ""
+			m.form.keyPickFocus = false
+			m.form.deleteFocus = false
+			m.form.deleteArmed = false
 			return m, m.focusInputs()
 		}
 	case "d":
