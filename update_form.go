@@ -37,6 +37,9 @@ func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	case "?":
+		m.helpOpen = true
+		return m, nil
 	case "ctrl+t":
 		h := Host{
 			Hostname:     m.form.inputs[fieldHostname].Value(),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,6 +37,9 @@ func dockerRefreshTick() tea.Cmd {
 func (m model) View() string {
 	if m.quitting {
 		return ""
+	}
+	if m.helpOpen {
+		return m.renderHelpView()
 	}
 	if m.about.open {
 		return m.renderAboutView()
@@ -91,6 +95,89 @@ func (m model) renderAboutView() string {
 	base := dimBase(m.renderListView())
 	modal := renderAboutModal(m.about.frame)
 	return overlayCenter(base, modal, m.width, m.height)
+}
+
+func (m model) renderHelpView() string {
+	var base string
+	if m.state == stateForm {
+		base = dimBase(m.renderFormView())
+	} else {
+		base = dimBase(m.renderListView())
+	}
+	modal := renderHelpModal()
+	return overlayCenter(base, modal, m.width, m.height)
+}
+
+func renderHelpModal() string {
+	const modalBg = lipgloss.Color("#0D0D0D")
+
+	sp := lipgloss.NewStyle().Background(modalBg)
+	titleStyle := lipgloss.NewStyle().Foreground(colorText).Background(modalBg).Bold(true)
+	keyStyle := helpKeyStyle.Background(modalBg)
+	descStyle := helpDescStyle.Background(modalBg)
+	sectionStyle := lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Background(modalBg)
+	divStyle := lipgloss.NewStyle().Foreground(colorSubtle).Background(modalBg)
+
+	sep := divStyle.Render("  ")
+	entrySep := divStyle.Render("   ")
+
+	row := func(key, desc string) string {
+		return keyStyle.Render(key) + sp.Render(" ") + descStyle.Render(desc)
+	}
+
+	div := divStyle.Render(strings.Repeat("─", 52))
+
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("Keyboard Reference") + "\n")
+	b.WriteString(div + "\n\n")
+
+	// Dashboard section
+	b.WriteString(sectionStyle.Render("DASHBOARD") + "\n")
+	b.WriteString(row("enter", "connect") + sep + row("n", "new host") + sep + row("e", "edit") + "\n")
+	b.WriteString(row("c", "duplicate") + sep + row("d/d", "delete") + sep + row("p", "pin/unpin") + "\n")
+	b.WriteString(row("space/→", "expand") + sep + row("←", "collapse") + sep + row("ctrl+d", "force scan") + "\n")
+	b.WriteString(row("/", "filter") + sep + row("h", "history") + sep + row("i", "import SSH config") + "\n")
+	b.WriteString(row("g", "new group") + sep + row("r", "rename group") + sep + row("⇧↑↓", "reorder") + "\n")
+	b.WriteString(row("a", "about") + sep + row("?", "help") + sep + row("q", "quit") + "\n")
+	b.WriteString("\n")
+
+	// Form section
+	b.WriteString(sectionStyle.Render("FORM (add / edit)") + "\n")
+	b.WriteString(row("tab/↓", "next field") + entrySep + row("⇧tab/↑", "prev field") + "\n")
+	b.WriteString(row("enter", "advance / save") + entrySep + row("←→", "cycle group") + "\n")
+	b.WriteString(row("ctrl+t", "test connection") + entrySep + row("esc", "cancel") + "\n")
+	b.WriteString("\n")
+
+	// History section
+	b.WriteString(sectionStyle.Render("HISTORY") + "\n")
+	b.WriteString(row("enter", "connect") + sep + row("e", "edit") + sep + row("h/esc/q", "back") + "\n")
+	b.WriteString("\n")
+
+	// Field reference (for narrow terminals where the sidebar isn't shown)
+	b.WriteString(sectionStyle.Render("FIELD REFERENCE") + "\n")
+	fieldRef := []struct{ name, desc string }{
+		{"Key File", "Path to SSH private key (e.g. ~/.ssh/id_rsa)"},
+		{"Password", "Stored in OS keychain, not written to disk"},
+		{"Fwd. Agent", `"yes" to forward local SSH keys to the remote (-A)`},
+		{"ProxyJump", "Jump/bastion host: user@host:port — SSH tunnels through it"},
+		{"LocalFwd", "Port tunnel: local_port:remote_host:remote_port"},
+		{"Group", "Collapsible group; use ← → in form to cycle"},
+	}
+	for _, f := range fieldRef {
+		b.WriteString(keyStyle.Render(fmt.Sprintf("%-12s", f.name)) + sp.Render(" ") + descStyle.Render(f.desc) + "\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString(div + "\n")
+	b.WriteString(keyStyle.Render("?") + sp.Render(" ") + descStyle.Render("close") + sp.Render("   ") + keyStyle.Render("esc") + sp.Render(" ") + descStyle.Render("close"))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorPrimary).
+		Padding(1, 3).
+		Background(modalBg).
+		Render(b.String())
 }
 
 // dimBase strips existing ANSI styling from each line and re-renders it in a
@@ -310,6 +397,20 @@ func (m model) renderGroupRow() string {
 	return groupLabelStyle.Render("  Group       ") + groupValueStyle.Render("◀ "+groupValue+" ▶")
 }
 
+var formFieldHints = [fieldCount]string{
+	fieldAlias:        "Friendly name shown in the host list. Connect directly via `assho connect <alias>`.",
+	fieldHostname:     "IP address or domain name of the server (e.g. 192.168.1.50 or db.example.com).",
+	fieldUser:         "SSH username to log in as (e.g. root, ubuntu, deploy).",
+	fieldPort:         "SSH port. Standard is 22 — only change if the server uses a non-default port.",
+	fieldKeyFile:      "Path to your SSH private key file (e.g. ~/.ssh/id_rsa). Key-based auth is preferred over passwords.",
+	fieldPassword:     "SSH password — stored securely in your OS keychain, not written to the config file.",
+	fieldForwardAgent: `SSH agent forwarding (-A). Type "yes" to let the remote server use your local SSH keys, useful for hopping to other servers from a bastion.`,
+	fieldProxyJump:    "A bastion or jump host used to reach this server. SSH tunnels through it transparently. Format: user@host:port",
+	fieldLocalForward: "Creates a local port tunnel into the remote network. Format: local_port:remote_host:remote_port — e.g. 5432:localhost:5432 to reach a remote database as if it were local.",
+	fieldGroup:        "Assign to a collapsible group (prod, staging, homelab…). Use ← → to cycle through existing groups.",
+	fieldNotes:        "Free-text note shown beneath the alias in the host list.",
+}
+
 func (m model) renderFormSidebar(width int) string {
 	var b strings.Builder
 	b.WriteString(m.renderFormTitle() + "\n\n")
@@ -318,6 +419,18 @@ func (m model) renderFormSidebar(width int) string {
 	} else {
 		b.WriteString(formHintStyle.Render("Editing "+m.form.selectedHost.Alias) + "\n")
 	}
+
+	// Per-field description
+	if idx := m.form.focusIndex; idx >= 0 && idx < fieldCount {
+		hintW := max(width-6, 8)
+		hintStyle := lipgloss.NewStyle().Foreground(colorDimText).Italic(true).Width(hintW)
+		div := formDividerStyle.Render(strings.Repeat("─", hintW))
+		b.WriteString("\n")
+		b.WriteString(formSectionStyle.Render("  FIELD") + "\n")
+		b.WriteString(div + "\n")
+		b.WriteString(hintStyle.Render(formFieldHints[idx]) + "\n")
+	}
+
 	b.WriteString("\n")
 	b.WriteString(formSectionStyle.Render("  ACTIONS") + "\n")
 	b.WriteString(formDividerStyle.Render(strings.Repeat("─", max(width-6, 8))) + "\n")

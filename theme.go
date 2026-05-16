@@ -192,6 +192,7 @@ func renderListHelp(selected list.Item) string {
 		helpEntry("h", "history"),
 		helpEntry("i", "import"),
 		helpEntry("a", "about"),
+		helpEntry("?", "help"),
 		helpEntry("q", "quit"),
 	}
 
@@ -211,6 +212,7 @@ func renderFormHelp() string {
 		helpEntry("ctrl+t", "test conn"),
 		helpEntry("pick", "key file"),
 		helpEntry("←→", "group"),
+		helpEntry("?", "help"),
 		helpEntry("esc", "cancel"),
 	}
 	sep := helpSepStyle.Render(" | ")

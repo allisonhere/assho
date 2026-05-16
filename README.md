@@ -66,6 +66,7 @@ sudo make install
 
 ```bash
 assho                    # launch the TUI
+assho --help             # print usage
 assho --version          # print version
 ```
 
@@ -78,6 +79,7 @@ assho test <alias>            # test connectivity, exits 0/1
 assho completion bash         # print bash completion script
 assho completion zsh          # print zsh completion script
 assho completion fish         # print fish completion script
+assho help                    # print usage
 ```
 
 ### Shell Completions
@@ -123,6 +125,7 @@ assho completion fish > ~/.config/fish/completions/assho.fish
 | `r` | Rename selected group |
 | `d` / `x` | Delete group (press twice to confirm) |
 | `a` | About |
+| `?` | Keybinding help |
 | `q` | Quit |
 
 #### History
@@ -143,6 +146,7 @@ assho completion fish > ~/.config/fish/completions/assho.fish
 | `Enter` | Open file picker (when the `Pick` control beside `Key File` is focused) |
 | `←` / `→` | Cycle group selection |
 | `Ctrl+T` | Test connection and show status in the form sidebar |
+| `?` | Keybinding help |
 | `Esc` | Cancel |
 
 On wider terminals, the add/edit screen renders as a main form with a side panel for actions and status. On narrower terminals, it falls back to a stacked layout.

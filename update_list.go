@@ -229,6 +229,9 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.rebuildHistoryList()
 		m.state = stateHistory
 		return m, nil
+	case "?":
+		m.helpOpen = true
+		return m, nil
 	case "a":
 		m.about.open = true
 		m.about.frame = 0

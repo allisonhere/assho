@@ -76,6 +76,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filepicker.Height = msg.Height - 8
 		return m, nil
 	case tea.KeyMsg:
+		if m.helpOpen {
+			return m.updateHelp(msg)
+		}
 		if m.about.open {
 			return m.updateAbout(msg)
 		}
@@ -94,6 +97,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// Forward non-key messages to the active sub-component (cursor blink, etc.)
 	return m.forwardMsg(msg)
+}
+
+func (m model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "?", "esc", "q":
+		m.helpOpen = false
+	}
+	return m, nil
 }
 
 func (m model) updateAbout(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

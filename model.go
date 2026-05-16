@@ -72,6 +72,7 @@ type model struct {
 	history     []HistoryEntry
 	historyList list.Model
 	about       aboutState
+	helpOpen    bool
 	headerFrame int
 }
 

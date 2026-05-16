@@ -14,6 +14,28 @@ import (
 
 var version = "dev"
 
+const cliHelp = `assho — Another SSH Organizer
+
+USAGE
+  assho                         launch the TUI
+  assho <command> [args]        run a CLI command
+
+COMMANDS
+  connect <alias>               connect directly to a host, no TUI
+  test <alias>                  test SSH connectivity; exits 0 on success
+  list                          print all hosts as a table
+  completion <bash|zsh|fish>    print shell completion script
+
+OPTIONS
+  --version, -v                 print version and exit
+  --help, -h                    show this help
+
+SHELL COMPLETIONS
+  bash    eval "$(assho completion bash)"
+  zsh     eval "$(assho completion zsh)"
+  fish    assho completion fish > ~/.config/fish/completions/assho.fish
+`
+
 type resolvedAliasTarget struct {
 	host   Host
 	parent *Host
@@ -154,6 +176,9 @@ func cliTest(alias string) {
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
+		case "--help", "-h", "help":
+			fmt.Print(cliHelp)
+			return
 		case "--version", "-v":
 			fmt.Println("assho " + version)
 			return
