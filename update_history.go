@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -17,36 +15,29 @@ func (m model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if i, ok := m.historyList.SelectedItem().(Host); ok {
 			if i.Hostname == "" {
-				// Deleted host — cannot connect
-				return m, nil
-			}
-			snapshot := m.snapshot()
-			m.history = recordHistory(i.ID, i.Alias, m.history)
-			if err := m.save(); err != nil {
-				m.restoreSnapshot(snapshot)
 				m.state = stateList
-				m.status.message = fmt.Sprintf("Failed to save history: %v", err)
+				m.status.message = "Host no longer exists"
 				m.status.isError = true
-				return m, nil
+				m.status.version++
+				return m, statusClearCmd(m.status.version)
 			}
-			m.sshToRun = &i
-			return m, tea.Quit
+			return m.connectToHost(i)
 		}
 	case "e":
 		if i, ok := m.historyList.SelectedItem().(Host); ok {
 			idx := findHostIndexByID(m.rawHosts, i.ID)
-			if idx != -1 {
-				m.state = stateForm
-				h := m.rawHosts[idx]
-				m.form.selectedHost = &h
-				m.form.inputs = newFormInputs()
-				m.populateForm(h)
-				m.form.formError = ""
-				m.form.keyPickFocus = false
-				m.form.deleteFocus = false
-				m.form.deleteArmed = false
-				return m, m.focusInputs()
+			if idx == -1 {
+				m.status.message = "Host no longer exists"
+				m.status.isError = true
+				m.status.version++
+				return m, statusClearCmd(m.status.version)
 			}
+			m.state = stateForm
+			h := m.rawHosts[idx]
+			m.form.selectedHost = &h
+			m.form.inputs = newFormInputs()
+			m.populateForm(h)
+			return m, m.focusInputs()
 		}
 	}
 	var cmd tea.Cmd

@@ -161,10 +161,10 @@ func TestRenderFormViewWideShowsReorganizedSections(t *testing.T) {
 	}
 
 	if strings.Index(out, "ADVANCED") < strings.Index(out, "AUTH") {
-		t.Fatal("expected AUTH section to appear before ADVANCED")
+		t.Error("expected AUTH section to appear before ADVANCED")
 	}
 	if strings.Index(out, "METADATA") < strings.Index(out, "ORGANIZATION") {
-		t.Fatal("expected METADATA section to appear after ORGANIZATION")
+		t.Error("expected METADATA section to appear after ORGANIZATION")
 	}
 }
 

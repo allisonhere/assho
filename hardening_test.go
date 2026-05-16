@@ -211,7 +211,7 @@ func TestModelFindersAndContainerCount(t *testing.T) {
 		t.Fatalf("expected -1 for missing host, got %d", idx)
 	}
 	if idx := findGroupIndexByID(groups, "g1"); idx != 0 {
-		t.Fatalf("expected group index 0, got %d", idx)
+		t.Errorf("expected group index 0, got %d", idx)
 	}
 	if idx := findGroupByName(groups, "  STAGING "); idx != 1 {
 		t.Fatalf("expected case-insensitive match index 1, got %d", idx)

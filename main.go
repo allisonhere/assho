@@ -19,18 +19,11 @@ type resolvedAliasTarget struct {
 }
 
 func findHostByAlias(hosts []Host, alias string) *Host {
-	lower := strings.ToLower(alias)
-	for i := range hosts {
-		if strings.ToLower(hosts[i].Alias) == lower {
-			return &hosts[i]
-		}
-		for j := range hosts[i].Containers {
-			if strings.ToLower(hosts[i].Containers[j].Alias) == lower {
-				return &hosts[i].Containers[j]
-			}
-		}
+	target, err := resolveAliasForCLITest(hosts, alias)
+	if err != nil {
+		return nil
 	}
-	return nil
+	return &target.host
 }
 
 func resolveAliasForCLITest(hosts []Host, alias string) (*resolvedAliasTarget, error) {

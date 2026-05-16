@@ -374,13 +374,6 @@ func (m model) renderFormStatus() string {
 	return ""
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func renderLogo(frame int) string {
 	var b strings.Builder
 

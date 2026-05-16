@@ -153,8 +153,11 @@ func cloneHistory(history []HistoryEntry) []HistoryEntry {
 	return cloned
 }
 
-// Helper to flatten the tree for list view
-func flattenHosts(groups []Group, hosts []Host) []list.Item {
+// flattenHostsImpl builds the flat list.Item slice from the host tree.
+// When respectExpand is true, collapsed groups and unexpanded hosts hide their
+// children (normal list view). When false, all children are always included
+// (used before filter mode so collapsed items remain searchable).
+func flattenHostsImpl(groups []Group, hosts []Host, respectExpand bool) []list.Item {
 	var items []list.Item
 
 	// Pinned hosts first under a synthetic group header.
@@ -173,7 +176,7 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 			h := hosts[i]
 			h.ListIndent = 1
 			items = append(items, h)
-			if h.Expanded {
+			if !respectExpand || h.Expanded {
 				for j := range h.Containers {
 					c := h.Containers[j]
 					c.ParentID = h.ID
@@ -192,7 +195,7 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 		h := hosts[i]
 		h.ListIndent = 0
 		items = append(items, h)
-		if h.Expanded {
+		if !respectExpand || h.Expanded {
 			for j := range h.Containers {
 				c := h.Containers[j]
 				c.ParentID = h.ID
@@ -212,7 +215,7 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 			}
 		}
 		items = append(items, groupItem{Group: g, HostCount: hostCount})
-		if !g.Expanded {
+		if respectExpand && !g.Expanded {
 			continue
 		}
 		for j := range hosts {
@@ -222,7 +225,7 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 			h := hosts[j]
 			h.ListIndent = 1
 			items = append(items, h)
-			if h.Expanded {
+			if !respectExpand || h.Expanded {
 				for k := range h.Containers {
 					c := h.Containers[k]
 					c.ParentID = h.ID
@@ -235,76 +238,14 @@ func flattenHosts(groups []Group, hosts []Host) []list.Item {
 	return items
 }
 
-// flattenAll is like flattenHosts but includes every host and container
-// regardless of group/host expansion state. Used to populate the list before
-// filter mode so that hosts inside collapsed groups are searchable.
+func flattenHosts(groups []Group, hosts []Host) []list.Item {
+	return flattenHostsImpl(groups, hosts, true)
+}
+
+// flattenAll includes every host and container regardless of expansion state.
+// Used to populate the list before filter mode so collapsed items are searchable.
 func flattenAll(groups []Group, hosts []Host) []list.Item {
-	var items []list.Item
-
-	// Pinned section first.
-	var pinnedIdx []int
-	for i := range hosts {
-		if hosts[i].Pinned && !hosts[i].IsContainer {
-			pinnedIdx = append(pinnedIdx, i)
-		}
-	}
-	if len(pinnedIdx) > 0 {
-		items = append(items, groupItem{
-			Group:     Group{ID: "__pinned__", Name: "★ Pinned", Expanded: true},
-			HostCount: len(pinnedIdx),
-		})
-		for _, i := range pinnedIdx {
-			h := hosts[i]
-			h.ListIndent = 1
-			items = append(items, h)
-			for j := range h.Containers {
-				c := h.Containers[j]
-				c.ParentID = h.ID
-				c.ListIndent = 2
-				items = append(items, c)
-			}
-		}
-	}
-
-	for i := range hosts {
-		if hosts[i].GroupID != "" {
-			continue
-		}
-		h := hosts[i]
-		h.ListIndent = 0
-		items = append(items, h)
-		for j := range h.Containers {
-			c := h.Containers[j]
-			c.ParentID = h.ID
-			c.ListIndent = 1
-			items = append(items, c)
-		}
-	}
-	for i := range groups {
-		g := groups[i]
-		hostCount := 0
-		for j := range hosts {
-			if hosts[j].GroupID == g.ID {
-				hostCount++
-			}
-		}
-		items = append(items, groupItem{Group: g, HostCount: hostCount})
-		for j := range hosts {
-			if hosts[j].GroupID != g.ID {
-				continue
-			}
-			h := hosts[j]
-			h.ListIndent = 1
-			items = append(items, h)
-			for k := range h.Containers {
-				c := h.Containers[k]
-				c.ParentID = h.ID
-				c.ListIndent = 2
-				items = append(items, c)
-			}
-		}
-	}
-	return items
+	return flattenHostsImpl(groups, hosts, false)
 }
 
 // buildLastConnected returns a map of hostID → most-recent connection timestamp
@@ -859,6 +800,22 @@ func (m *model) reselectItem(id string, isGroup bool) {
 
 func (m *model) clearListDeleteConfirm() {
 	m.listDelete = listDeleteState{}
+}
+
+func (m model) connectToHost(h Host) (tea.Model, tea.Cmd) {
+	m.clearListDeleteConfirm()
+	snapshot := m.snapshot()
+	m.history = recordHistory(h.ID, h.Alias, m.history)
+	if err := m.save(); err != nil {
+		m.restoreSnapshot(snapshot)
+		m.status.message = fmt.Sprintf("Failed to save history: %v", err)
+		m.status.isError = true
+		m.status.version++
+		return m, statusClearCmd(m.status.version)
+	}
+	m.refreshDelegate()
+	m.sshToRun = &h
+	return m, tea.Quit
 }
 
 func (m *model) snapshot() modelSnapshot {

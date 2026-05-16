@@ -39,10 +39,6 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.form.inputs = newFormInputs()
 		m.resetForm()
 		m.buildGroupOptions("")
-		m.form.formError = ""
-		m.form.keyPickFocus = false
-		m.form.deleteFocus = false
-		m.form.deleteArmed = false
 		return m, m.focusInputs()
 	case "enter", "space":
 		switch i := m.list.SelectedItem().(type) {
@@ -56,19 +52,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case Host:
 			if i.IsContainer {
-				m.clearListDeleteConfirm()
-				snapshot := m.snapshot()
-				m.history = recordHistory(i.ID, i.Alias, m.history)
-				if err := m.save(); err != nil {
-					m.restoreSnapshot(snapshot)
-					m.status.message = fmt.Sprintf("Failed to save history: %v", err)
-					m.status.isError = true
-					m.status.version++
-					return m, statusClearCmd(m.status.version)
-				}
-				m.refreshDelegate()
-				m.sshToRun = &i
-				return m, tea.Quit
+				return m.connectToHost(i)
 			}
 			if msg.String() == "space" {
 				for idx, h := range m.rawHosts {
@@ -80,19 +64,7 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if msg.String() == "enter" {
-				m.clearListDeleteConfirm()
-				snapshot := m.snapshot()
-				m.history = recordHistory(i.ID, i.Alias, m.history)
-				if err := m.save(); err != nil {
-					m.restoreSnapshot(snapshot)
-					m.status.message = fmt.Sprintf("Failed to save history: %v", err)
-					m.status.isError = true
-					m.status.version++
-					return m, statusClearCmd(m.status.version)
-				}
-				m.refreshDelegate()
-				m.sshToRun = &i
-				return m, tea.Quit
+				return m.connectToHost(i)
 			}
 		}
 	case "right":
@@ -161,10 +133,6 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form.selectedHost = &i
 			m.form.inputs = newFormInputs()
 			m.populateForm(i)
-			m.form.formError = ""
-			m.form.keyPickFocus = false
-			m.form.deleteFocus = false
-			m.form.deleteArmed = false
 			return m, m.focusInputs()
 		}
 	case "c":
@@ -178,10 +146,6 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form.selectedHost = nil
 			m.form.inputs = newFormInputs()
 			m.populateForm(clone)
-			m.form.formError = ""
-			m.form.keyPickFocus = false
-			m.form.deleteFocus = false
-			m.form.deleteArmed = false
 			return m, m.focusInputs()
 		}
 	case "d":

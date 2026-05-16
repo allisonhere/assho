@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -27,21 +26,6 @@ func makeSaveFailingHome(t *testing.T) string {
 	return home
 }
 
-func newTestListModel(groups []Group, hosts []Host) list.Model {
-	l := list.New(flattenHosts(groups, hosts), hostDelegate{}, 80, 24)
-	l.SetShowStatusBar(false)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	return l
-}
-
-func newTestHistoryListModel() list.Model {
-	l := list.New([]list.Item{}, hostDelegate{}, 80, 24)
-	l.SetShowStatusBar(false)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	return l
-}
 
 func TestSaveFromFormRollsBackOnSaveError(t *testing.T) {
 	makeSaveFailingHome(t)
@@ -118,7 +102,7 @@ func TestMoveItemRollsBackOnSaveError(t *testing.T) {
 		t.Fatal("expected moveItem to return error message on save failure")
 	}
 	if !strings.Contains(msg, "Failed to reorder") {
-		t.Fatalf("unexpected error message: %s", msg)
+		t.Errorf("unexpected error message: %s", msg)
 	}
 	// Verify rollback: order should be unchanged.
 	if m.rawHosts[0].ID != "h1" || m.rawHosts[1].ID != "h2" {
