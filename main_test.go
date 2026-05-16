@@ -1,11 +1,48 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// cliTestBinary is the path to the compiled assho binary, built once in TestMain.
+var cliTestBinary string
+
+func TestMain(m *testing.M) {
+	tmp, err := os.MkdirTemp("", "assho-cli-test-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(tmp)
+
+	cliTestBinary = filepath.Join(tmp, "assho")
+	out, err := exec.Command("go", "build", "-o", cliTestBinary, ".").CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to build assho binary: %v\n%s\n", err, out)
+		os.Exit(1)
+	}
+
+	os.Exit(m.Run())
+}
+
+// writeTempConfig saves hosts to a fresh temp HOME and returns that HOME path.
+func writeTempConfig(t *testing.T, hosts []Host) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ASSHO_STORE_PASSWORD", "0")
+	if err := saveConfig(nil, hosts, nil); err != nil {
+		t.Fatalf("writeTempConfig: %v", err)
+	}
+	return home
+}
 
 func TestSaveConfigWritesVersion(t *testing.T) {
 	tmp := t.TempDir()
@@ -69,6 +106,140 @@ func TestFlattenHostsIndentation(t *testing.T) {
 	container, ok := items[3].(Host)
 	if !ok || container.ListIndent != 2 {
 		t.Fatalf("expected container indent 2, got %#v", items[3])
+	}
+}
+
+// --- fprintCLIList ---
+
+func TestFprintCLIListHeader(t *testing.T) {
+	var buf bytes.Buffer
+	fprintCLIList(&buf, nil)
+	out := buf.String()
+	for _, col := range []string{"ALIAS", "HOST", "PORT", "USER", "NOTES"} {
+		if !strings.Contains(out, col) {
+			t.Errorf("expected header column %q in output", col)
+		}
+	}
+}
+
+func TestFprintCLIListSkipsContainers(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1", User: "root", Port: "22"},
+		{ID: "c1", Alias: "ctr", Hostname: "abc123", IsContainer: true},
+	}
+	var buf bytes.Buffer
+	fprintCLIList(&buf, hosts)
+	out := buf.String()
+	if strings.Contains(out, "ctr") {
+		t.Error("container row should not appear in cliList output")
+	}
+	if !strings.Contains(out, "web") {
+		t.Error("expected host row to appear in cliList output")
+	}
+}
+
+func TestFprintCLIListDefaultsPortTo22(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "srv", Hostname: "10.0.0.1", User: "root", Port: ""},
+	}
+	var buf bytes.Buffer
+	fprintCLIList(&buf, hosts)
+	if !strings.Contains(buf.String(), "22") {
+		t.Error("expected default port 22 when port is empty")
+	}
+}
+
+func TestFprintCLIListTruncatesNotes(t *testing.T) {
+	longNote := strings.Repeat("x", 40)
+	hosts := []Host{
+		{ID: "h1", Alias: "srv", Hostname: "10.0.0.1", User: "root", Port: "22", Notes: longNote},
+	}
+	var buf bytes.Buffer
+	fprintCLIList(&buf, hosts)
+	out := buf.String()
+	if strings.Contains(out, longNote) {
+		t.Error("expected long note to be truncated")
+	}
+	if !strings.Contains(out, "…") {
+		t.Error("expected truncation ellipsis in output")
+	}
+}
+
+func TestFprintCLIListMultipleHosts(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "alpha", Hostname: "10.0.0.1", User: "root", Port: "22"},
+		{ID: "h2", Alias: "beta", Hostname: "10.0.0.2", User: "admin", Port: "2222"},
+	}
+	var buf bytes.Buffer
+	fprintCLIList(&buf, hosts)
+	out := buf.String()
+	if !strings.Contains(out, "alpha") || !strings.Contains(out, "beta") {
+		t.Error("expected both hosts in output")
+	}
+	if !strings.Contains(out, "2222") {
+		t.Error("expected non-default port in output")
+	}
+}
+
+// --- CLI subprocess tests (require binary built in TestMain) ---
+
+func runCLI(t *testing.T, home string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(cliTestBinary, args...)
+	cmd.Env = append(os.Environ(), "HOME="+home, "ASSHO_STORE_PASSWORD=0")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestCLITestNoAlias(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "test")
+	if err == nil {
+		t.Fatal("expected non-zero exit for missing alias argument")
+	}
+	if !strings.Contains(out, "usage:") {
+		t.Errorf("expected usage message, got: %q", out)
+	}
+}
+
+func TestCLITestUnknownAlias(t *testing.T) {
+	home := writeTempConfig(t, []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1", User: "root"},
+	})
+	out, err := runCLI(t, home, "test", "no-such-host")
+	if err == nil {
+		t.Fatal("expected non-zero exit for unknown alias")
+	}
+	if !strings.Contains(out, "host not found") {
+		t.Errorf("expected 'host not found', got: %q", out)
+	}
+}
+
+func TestCLITestAmbiguousAlias(t *testing.T) {
+	home := writeTempConfig(t, []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1", User: "root"},
+		{ID: "h2", Alias: "web", Hostname: "10.0.0.2", User: "root"},
+	})
+	out, err := runCLI(t, home, "test", "web")
+	if err == nil {
+		t.Fatal("expected non-zero exit for ambiguous alias")
+	}
+	if !strings.Contains(out, "ambiguous") {
+		t.Errorf("expected 'ambiguous' in output, got: %q", out)
+	}
+}
+
+func TestCLIListOutputFormat(t *testing.T) {
+	home := writeTempConfig(t, []Host{
+		{ID: "h1", Alias: "prod-web", Hostname: "10.0.0.1", User: "deploy", Port: "2222"},
+	})
+	out, err := runCLI(t, home, "list")
+	if err != nil {
+		t.Fatalf("assho list failed: %v\noutput: %q", err, out)
+	}
+	for _, want := range []string{"ALIAS", "prod-web", "10.0.0.1", "deploy", "2222"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in list output, got:\n%s", want, out)
+		}
 	}
 }
 

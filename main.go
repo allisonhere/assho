@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -63,14 +64,9 @@ func resolveAliasForCLITest(hosts []Host, alias string) (*resolvedAliasTarget, e
 	}
 }
 
-func cliList() {
-	_, hosts, _, err := loadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("%-20s %-30s %-6s %-16s %s\n", "ALIAS", "HOST", "PORT", "USER", "NOTES")
-	fmt.Println(strings.Repeat("-", 80))
+func fprintCLIList(w io.Writer, hosts []Host) {
+	fmt.Fprintf(w, "%-20s %-30s %-6s %-16s %s\n", "ALIAS", "HOST", "PORT", "USER", "NOTES")
+	fmt.Fprintln(w, strings.Repeat("-", 80))
 	for _, h := range hosts {
 		if h.IsContainer {
 			continue
@@ -83,8 +79,17 @@ func cliList() {
 		if len(notes) > 30 {
 			notes = notes[:29] + "…"
 		}
-		fmt.Printf("%-20s %-30s %-6s %-16s %s\n", h.Alias, h.Hostname, port, h.User, notes)
+		fmt.Fprintf(w, "%-20s %-30s %-6s %-16s %s\n", h.Alias, h.Hostname, port, h.User, notes)
 	}
+}
+
+func cliList() {
+	_, hosts, _, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+		os.Exit(1)
+	}
+	fprintCLIList(os.Stdout, hosts)
 }
 
 func cliConnect(alias string) {
