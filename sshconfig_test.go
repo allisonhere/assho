@@ -200,6 +200,105 @@ func TestParseSSHConfigInclude(t *testing.T) {
 	}
 }
 
+// writeSSHConfigInHome creates ~/.ssh/config inside a fresh temp HOME and
+// returns the HOME path. The test's HOME env var is set automatically.
+func writeSSHConfigInHome(t *testing.T, content string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatalf("mkdir .ssh: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sshDir, "config"), []byte(content), 0600); err != nil {
+		t.Fatalf("write ssh config: %v", err)
+	}
+	return home
+}
+
+func TestImportSSHConfigDirect(t *testing.T) {
+	writeSSHConfigInHome(t, `
+Host web
+    HostName 10.0.0.1
+    User deploy
+    Port 2222
+
+Host db
+    HostName 10.0.0.2
+    User root
+`)
+	imported, skipped, err := importSSHConfig(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Errorf("expected 2 imported hosts, got %d", len(imported))
+	}
+	if skipped != 0 {
+		t.Errorf("expected 0 skipped, got %d", skipped)
+	}
+}
+
+func TestImportSSHConfigDeduplicatesAgainstExisting(t *testing.T) {
+	writeSSHConfigInHome(t, `
+Host web
+    HostName 10.0.0.1
+
+Host new-host
+    HostName 10.0.0.3
+
+Host WEB
+    HostName 10.0.0.1
+`)
+	existing := []Host{{ID: "h1", Alias: "web", Hostname: "10.0.0.1"}}
+	imported, skipped, err := importSSHConfig(existing)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(imported) != 1 {
+		t.Errorf("expected 1 imported host, got %d", len(imported))
+	}
+	if len(imported) == 1 && imported[0].Alias != "new-host" {
+		t.Errorf("expected imported alias 'new-host', got %q", imported[0].Alias)
+	}
+	if skipped != 2 {
+		t.Errorf("expected 2 skipped (web + WEB), got %d", skipped)
+	}
+}
+
+func TestImportSSHConfigDeduplicatesWithinImport(t *testing.T) {
+	writeSSHConfigInHome(t, `
+Host foo
+    HostName 1.1.1.1
+
+Host FOO
+    HostName 2.2.2.2
+
+Host bar
+    HostName 3.3.3.3
+`)
+	imported, skipped, err := importSSHConfig(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Errorf("expected 2 hosts (foo + bar, FOO deduped within import), got %d", len(imported))
+	}
+	if skipped != 1 {
+		t.Errorf("expected 1 skipped (FOO), got %d", skipped)
+	}
+}
+
+func TestImportSSHConfigMissingFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	// No ~/.ssh/config present.
+	_, _, err := importSSHConfig(nil)
+	if err == nil {
+		t.Fatal("expected error when ~/.ssh/config does not exist")
+	}
+}
+
 func TestImportSSHConfigDeduplicates(t *testing.T) {
 	config := `
 Host existing-host

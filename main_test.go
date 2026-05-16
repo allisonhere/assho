@@ -44,6 +44,116 @@ func writeTempConfig(t *testing.T, hosts []Host) string {
 	return home
 }
 
+// --- fprintAliases ---
+
+func TestFprintAliasesIncludesHosts(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "web"},
+		{ID: "h2", Alias: "db"},
+	}
+	var buf bytes.Buffer
+	fprintAliases(&buf, hosts)
+	out := buf.String()
+	for _, alias := range []string{"web", "db"} {
+		if !strings.Contains(out, alias) {
+			t.Errorf("expected alias %q in output, got: %q", alias, out)
+		}
+	}
+}
+
+func TestFprintAliasesIncludesContainers(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "docker-host", Containers: []Host{
+			{ID: "c1", Alias: "sonarr", IsContainer: true},
+		}},
+	}
+	var buf bytes.Buffer
+	fprintAliases(&buf, hosts)
+	out := buf.String()
+	if !strings.Contains(out, "docker-host") {
+		t.Error("expected parent host alias in output")
+	}
+	if !strings.Contains(out, "sonarr") {
+		t.Error("expected container alias in output")
+	}
+}
+
+func TestFprintAliasesEmptyHosts(t *testing.T) {
+	var buf bytes.Buffer
+	fprintAliases(&buf, nil)
+	if buf.Len() != 0 {
+		t.Errorf("expected empty output for nil hosts, got: %q", buf.String())
+	}
+}
+
+// --- completion subprocess tests ---
+
+func TestCLIAliasesOutputsAliases(t *testing.T) {
+	home := writeTempConfig(t, []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1", User: "root"},
+		{ID: "h2", Alias: "db", Hostname: "10.0.0.2", User: "root"},
+	})
+	out, err := runCLI(t, home, "_aliases")
+	if err != nil {
+		t.Fatalf("_aliases failed: %v\noutput: %s", err, out)
+	}
+	for _, alias := range []string{"web", "db"} {
+		if !strings.Contains(out, alias) {
+			t.Errorf("expected alias %q in _aliases output, got: %s", alias, out)
+		}
+	}
+}
+
+func TestCLICompletionBash(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "completion", "bash")
+	if err != nil {
+		t.Fatalf("completion bash failed: %v", err)
+	}
+	if !strings.Contains(out, "complete -F _assho_completions assho") {
+		t.Errorf("expected bash completion registration, got:\n%s", out)
+	}
+}
+
+func TestCLICompletionZsh(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "completion", "zsh")
+	if err != nil {
+		t.Fatalf("completion zsh failed: %v", err)
+	}
+	if !strings.Contains(out, "compdef _assho assho") {
+		t.Errorf("expected zsh compdef in output, got:\n%s", out)
+	}
+}
+
+func TestCLICompletionFish(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "completion", "fish")
+	if err != nil {
+		t.Fatalf("completion fish failed: %v", err)
+	}
+	if !strings.Contains(out, "complete -c assho") {
+		t.Errorf("expected fish completion in output, got:\n%s", out)
+	}
+}
+
+func TestCLICompletionUnknownShell(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "completion", "powershell")
+	if err == nil {
+		t.Fatal("expected non-zero exit for unknown shell")
+	}
+	if !strings.Contains(out, "unknown shell") {
+		t.Errorf("expected 'unknown shell' message, got: %q", out)
+	}
+}
+
+func TestCLICompletionNoArgs(t *testing.T) {
+	out, err := runCLI(t, t.TempDir(), "completion")
+	if err == nil {
+		t.Fatal("expected non-zero exit when completion called with no shell")
+	}
+	if !strings.Contains(out, "usage:") {
+		t.Errorf("expected usage message, got: %q", out)
+	}
+}
+
 func TestSaveConfigWritesVersion(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)

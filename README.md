@@ -72,9 +72,31 @@ assho --version          # print version
 ### CLI Usage
 
 ```bash
-assho list               # print all hosts as a table
-assho connect <alias>    # connect directly, no TUI
-assho test <alias>       # test connectivity, exits 0/1
+assho list                    # print all hosts as a table
+assho connect <alias>         # connect directly, no TUI
+assho test <alias>            # test connectivity, exits 0/1
+assho completion bash         # print bash completion script
+assho completion zsh          # print zsh completion script
+assho completion fish         # print fish completion script
+```
+
+### Shell Completions
+
+Enable tab-completion for `assho connect` and `assho test`:
+
+**bash** — add to `~/.bashrc`:
+```bash
+eval "$(assho completion bash)"
+```
+
+**zsh** — add to `~/.zshrc`:
+```zsh
+eval "$(assho completion zsh)"
+```
+
+**fish** — run once:
+```fish
+assho completion fish > ~/.config/fish/completions/assho.fish
 ```
 
 ### Keybindings

@@ -174,6 +174,30 @@ func main() {
 			}
 			cliTest(os.Args[2])
 			return
+		case "_aliases":
+			_, hosts, _, err := loadConfig()
+			if err != nil {
+				os.Exit(1)
+			}
+			fprintAliases(os.Stdout, hosts)
+			return
+		case "completion":
+			if len(os.Args) < 3 {
+				fmt.Fprintln(os.Stderr, "usage: assho completion [bash|zsh|fish]")
+				os.Exit(1)
+			}
+			switch os.Args[2] {
+			case "bash":
+				fmt.Println(bashCompletion)
+			case "zsh":
+				fmt.Println(zshCompletion)
+			case "fish":
+				fmt.Println(fishCompletion)
+			default:
+				fmt.Fprintf(os.Stderr, "unknown shell %q; supported: bash, zsh, fish\n", os.Args[2])
+				os.Exit(1)
+			}
+			return
 		}
 	}
 
