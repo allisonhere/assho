@@ -33,12 +33,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scanning = false
 		}
 		if msg.err != nil {
-			if !msg.background {
-				m.status.message = fmt.Sprintf("Scan failed: %v", msg.err)
-				m.status.isError = true
-				m.status.version++
-				return m, statusClearCmd(m.status.version)
-			}
+			m.status.message = fmt.Sprintf("Scan failed: %v", msg.err)
+			m.status.isError = true
+			m.status.version++
+			return m, statusClearCmd(m.status.version)
 		} else {
 			if msg.hostIndex >= 0 && msg.hostIndex < len(m.rawHosts) {
 				m.rawHosts[msg.hostIndex].Containers = msg.containers

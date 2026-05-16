@@ -31,7 +31,8 @@ Stop typing `ssh root@192.168.1.47 -p 2222 -i ~/.ssh/id_rsa` from memory. Assho 
 - **Notes** — attach a free-text note to any host (shown truncated in the list).
 - **Duplicate host** — clone any host with `c` and tweak the copy, great for similar servers.
 - **SSH config import** — pull hosts in from `~/.ssh/config` with `i`.
-- **Non-interactive CLI** — connect, test, or list hosts without launching the TUI (see [CLI Usage](#cli-usage)).
+- **Non-interactive CLI** — connect, test, list, or export hosts without launching the TUI (see [CLI Usage](#cli-usage)).
+- **SSH config export** — print all hosts as `~/.ssh/config` stanzas with `assho export`, so other tools (VS Code Remote, rsync, scp) can see them.
 - **Fuzzy search** — type `/` and filter across all hosts and groups by alias or hostname.
 - **Connection testing** — verify connectivity before saving with `Ctrl+T`.
 - **Identity file picker** — browse and select SSH keys with a built-in file picker.
@@ -62,6 +63,8 @@ cd assho
 sudo make install
 ```
 
+`sudo make install` also installs the man page to `/usr/local/share/man/man1/`. View it with `man assho`.
+
 ## Usage
 
 ```bash
@@ -76,6 +79,7 @@ assho --version          # print version
 assho list                    # print all hosts as a table
 assho connect <alias>         # connect directly, no TUI
 assho test <alias>            # test connectivity, exits 0/1
+assho export                  # print hosts as SSH config stanzas
 assho completion bash         # print bash completion script
 assho completion zsh          # print zsh completion script
 assho completion fish         # print fish completion script

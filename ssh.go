@@ -157,13 +157,12 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 			}
 			parts := strings.Split(line, "\t")
 			if len(parts) >= 2 {
-				id := parts[0]
 				name := parts[1]
 				containers = append(containers, Host{
 					ID:          newHostID(),
 					Alias:       name,
-					Hostname:    id,     // Use ID as "hostname" for exec
-					User:        "root", // Default to root inside container
+					Hostname:    name,
+					User:        "root",
 					IsContainer: true,
 					ParentID:    h.ID,
 				})

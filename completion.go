@@ -29,7 +29,7 @@ _assho_completions() {
             COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
             ;;
         *)
-            COMPREPLY=($(compgen -W "connect test list completion --version" -- "$cur"))
+            COMPREPLY=($(compgen -W "connect test list export completion --version" -- "$cur"))
             ;;
     esac
 }
@@ -43,6 +43,7 @@ _assho() {
         'connect:connect to a host by alias'
         'test:test SSH connectivity for an alias'
         'list:list all configured hosts'
+        'export:print hosts as SSH config stanzas'
         'completion:generate shell completion scripts'
         '--version:print version and exit'
     )
@@ -77,6 +78,7 @@ complete -c assho -f
 complete -c assho -n '__assho_no_subcommand' -a connect    -d 'Connect to a host'
 complete -c assho -n '__assho_no_subcommand' -a test       -d 'Test SSH connectivity'
 complete -c assho -n '__assho_no_subcommand' -a list       -d 'List all hosts'
+complete -c assho -n '__assho_no_subcommand' -a export     -d 'Print hosts as SSH config stanzas'
 complete -c assho -n '__assho_no_subcommand' -a completion -d 'Generate shell completions'
 complete -c assho -n '__assho_no_subcommand' -a --version  -d 'Print version'
 complete -c assho -n '__fish_seen_subcommand_from connect test' \

@@ -1,0 +1,279 @@
+.TH ASSHO 1 "2026-05-16" "assho 0.1.19" "General Commands Manual"
+.SH NAME
+assho \- Another SSH Organizer
+.SH SYNOPSIS
+.B assho
+.RB [ \-\-version ]
+.RB [ \-\-help ]
+.br
+.B assho
+.I command
+.RI [ argument ]
+.SH DESCRIPTION
+.B assho
+is a terminal user interface (TUI) for managing and connecting to SSH hosts.
+It stores host profiles\(emincluding credentials, port forwarding rules, and
+jump hosts\(emin a single config file and lets you connect with a single
+keystroke.
+Running
+.B assho
+with no arguments launches the interactive TUI.
+Non-interactive subcommands let you connect, test, list, and export hosts
+from scripts or shell aliases.
+.SH COMMANDS
+.TP
+.B connect \fIalias\fR
+Connect directly to the host or container identified by
+.IR alias ,
+bypassing the TUI.
+Accepts container aliases; SSH tunnels through the parent host and runs
+.BR "docker exec" .
+.TP
+.B test \fIalias\fR
+Test SSH connectivity for
+.IR alias .
+Exits 0 on success, 1 on failure.
+Works with both host and container aliases.
+.TP
+.B list
+Print all configured hosts as a formatted table.
+.TP
+.B export
+Print all hosts as
+.BR ssh_config (5)
+stanzas suitable for appending to
+.IR ~/.ssh/config ,
+so other tools (VS Code Remote, rsync, scp) can see them.
+Containers are omitted.
+.TP
+.B completion \fIshell\fR
+Print a shell completion script for
+.IR shell .
+Supported values:
+.BR bash ,
+.BR zsh ,
+.BR fish .
+See
+.B SHELL COMPLETIONS
+below.
+.TP
+.B help
+Print a usage summary and exit.
+.SH OPTIONS
+.TP
+.B \-\-version\fR, \fB\-v
+Print the version string and exit.
+.TP
+.B \-\-help\fR, \fB\-h
+Print a usage summary and exit.
+.SH TUI KEYBINDINGS
+.SS Dashboard
+.TS
+l l.
+enter	Connect to selected host
+n	New host
+e	Edit selected host
+c	Duplicate selected host
+d \fI(twice)\fR	Delete host or group
+p	Pin / unpin host
+space / \(->	Expand host (scan Docker containers)
+\(<-	Collapse host or group
+Ctrl+D	Force re-scan Docker containers
+/	Filter / search
+h	Recent connection history
+i	Import from ~/.ssh/config
+g	Create group
+r	Rename selected group
+Shift+\(ua / \(da	Reorder hosts or groups
+a	About
+?	Keybinding reference
+q	Quit
+.TE
+.SS Add / Edit Form
+.TS
+l l.
+Tab / \(da	Next field
+Shift+Tab / \(ua	Previous field
+Enter	Advance to next field; save on Notes
+\(<- / \(->	Cycle group selection
+Ctrl+T	Test connection
+?	Keybinding reference
+Esc	Cancel
+.TE
+.SS History
+.TS
+l l.
+Enter	Connect
+e	Edit host
+h / Esc / q	Back to dashboard
+.TE
+.SH FORM FIELDS
+.TP
+.B Alias
+Friendly name shown in the host list.
+Used as the argument to
+.B connect
+and
+.BR test .
+.TP
+.B Hostname
+IP address or domain name of the server.
+.TP
+.B User
+SSH username (e.g.\&
+.IR root ,
+.IR ubuntu ,
+.IR deploy ).
+.TP
+.B Port
+SSH port.
+Defaults to 22.
+.TP
+.B Key File
+Path to an SSH private key file (e.g.\&
+.IR ~/.ssh/id_rsa ).
+Use the
+.B Pick
+button to browse.
+.TP
+.B Password
+SSH password.
+Stored in the OS keychain (macOS Keychain or Linux
+.BR secret-tool (1)),
+never written to the config file.
+.TP
+.B Fwd.\& Agent
+SSH agent forwarding.
+Set to
+.B yes
+to pass
+.B \-A
+to ssh, allowing the remote host to use your local keys.
+.TP
+.B ProxyJump
+A bastion or jump host used to reach this server.
+Passed to SSH's
+.B \-J
+flag.
+Format:
+.RI [ user@ ] host [: port ]
+.TP
+.B LocalFwd
+A local port forwarding rule.
+Passed to SSH's
+.B \-L
+flag.
+Format:
+.I local_port\fR:\fIremote_host\fR:\fIremote_port
+(e.g.\&
+.IR 5432:localhost:5432 ).
+.TP
+.B Group
+Assign the host to a collapsible group.
+Use \(la\(ra in the form to cycle through existing groups.
+.TP
+.B Notes
+Free-text note shown beneath the alias in the host list.
+.SH SHELL COMPLETIONS
+Enable tab-completion for
+.B connect
+and
+.BR test :
+.PP
+.B bash
+\(em add to
+.IR ~/.bashrc :
+.PP
+.RS
+.EX
+eval "$(assho completion bash)"
+.EE
+.RE
+.PP
+.B zsh
+\(em add to
+.IR ~/.zshrc :
+.PP
+.RS
+.EX
+eval "$(assho completion zsh)"
+.EE
+.RE
+.PP
+.B fish
+\(em run once:
+.PP
+.RS
+.EX
+assho completion fish > ~/.config/fish/completions/assho.fish
+.EE
+.RE
+.SH ENVIRONMENT
+.TP
+.B ASSHO_STORE_PASSWORD
+Set to
+.B 0
+or
+.B false
+to disable password persistence to the OS keychain.
+.TP
+.B ASSHO_INSECURE_TEST
+Set to
+.B 1
+to skip host key verification during connection tests
+.RB ( assho\ test ).
+.SH FILES
+.TP
+.I ~/.config/assho/hosts.json
+Host profiles, groups, and connection history.
+Written with mode 0600.
+.TP
+.I ~/.ssh/config
+Read by
+.B assho import
+(key
+.BR i ).
+Written to by
+.BR "assho export" .
+.SH EXAMPLES
+Connect to a host directly:
+.PP
+.RS
+.EX
+assho connect prod-web
+.EE
+.RE
+.PP
+Test connectivity and use the exit code in a script:
+.PP
+.RS
+.EX
+assho test db && pg_dump ...
+.EE
+.RE
+.PP
+Export to SSH config so VS Code Remote can see your hosts:
+.PP
+.RS
+.EX
+assho export >> ~/.ssh/config
+.EE
+.RE
+.PP
+Connect directly to a Docker container on a remote host:
+.PP
+.RS
+.EX
+assho connect radarr
+.EE
+.RE
+.SH AUTHORS
+Written by Allison.
+Source: https://github.com/allisonhere/assho
+.SH LICENSE
+MIT
+.SH SEE ALSO
+.BR ssh (1),
+.BR ssh_config (5),
+.BR ssh-agent (1),
+.BR docker (1)

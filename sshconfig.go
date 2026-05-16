@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -202,4 +203,37 @@ func splitDirective(line string) (keyword, args string) {
 // isWildcard returns true if the alias contains glob characters.
 func isWildcard(alias string) bool {
 	return strings.ContainsAny(alias, "*?")
+}
+
+// fprintSSHConfig writes all non-container hosts as SSH config stanzas.
+// Pipe into ~/.ssh/config or redirect with >> to append.
+func fprintSSHConfig(w io.Writer, hosts []Host) {
+	for _, h := range hosts {
+		if h.IsContainer {
+			continue
+		}
+		fmt.Fprintf(w, "Host %s\n", h.Alias)
+		if h.Hostname != "" {
+			fmt.Fprintf(w, "    HostName %s\n", h.Hostname)
+		}
+		if h.User != "" {
+			fmt.Fprintf(w, "    User %s\n", h.User)
+		}
+		if h.Port != "" && h.Port != "22" {
+			fmt.Fprintf(w, "    Port %s\n", h.Port)
+		}
+		if h.IdentityFile != "" {
+			fmt.Fprintf(w, "    IdentityFile %s\n", h.IdentityFile)
+		}
+		if h.ForwardAgent {
+			fmt.Fprintf(w, "    ForwardAgent yes\n")
+		}
+		if h.ProxyJump != "" {
+			fmt.Fprintf(w, "    ProxyJump %s\n", h.ProxyJump)
+		}
+		if h.LocalForward != "" {
+			fmt.Fprintf(w, "    LocalForward %s\n", h.LocalForward)
+		}
+		fmt.Fprintln(w)
+	}
 }

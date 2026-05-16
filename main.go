@@ -24,6 +24,7 @@ COMMANDS
   connect <alias>               connect directly to a host, no TUI
   test <alias>                  test SSH connectivity; exits 0 on success
   list                          print all hosts as a table
+  export                        print all hosts as SSH config stanzas
   completion <bash|zsh|fish>    print shell completion script
 
 OPTIONS
@@ -120,14 +121,28 @@ func cliConnect(alias string) {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
 	}
-	h := findHostByAlias(hosts, alias)
-	if h == nil {
-		fmt.Fprintf(os.Stderr, "host not found: %s\n", alias)
+	target, err := resolveAliasForCLITest(hosts, alias)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	sshArgs := buildSSHArgs(*h, false, "")
-	binary, args, extraEnv, ok := buildSSHCommand(h.Password, sshArgs)
-	if h.Password != "" && !ok {
+
+	var sshArgs []string
+	var password string
+	if target.host.IsContainer {
+		if target.parent == nil {
+			fmt.Fprintf(os.Stderr, "container %q is missing its parent host reference\n", target.host.Alias)
+			os.Exit(1)
+		}
+		dockerCmd := fmt.Sprintf("docker exec -it %s sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'", target.host.Alias)
+		sshArgs = buildSSHArgs(*target.parent, true, dockerCmd)
+		password = target.parent.Password
+	} else {
+		sshArgs = buildSSHArgs(target.host, false, "")
+		password = target.host.Password
+	}
+	binary, args, extraEnv, ok := buildSSHCommand(password, sshArgs)
+	if password != "" && !ok {
 		fmt.Fprintln(os.Stderr, "warning: password set but sshpass not found")
 	}
 	finalBinaryPath, lookErr := exec.LookPath(binary)
@@ -158,7 +173,7 @@ func cliTest(alias string) {
 		if target.parent == nil {
 			testErr = fmt.Errorf("container %q is missing its parent host reference", target.host.Alias)
 		} else {
-			testErr = runSSHTest(*target.parent, fmt.Sprintf("docker exec %s sh -c 'exit'", target.host.Hostname))
+			testErr = runSSHTest(*target.parent, fmt.Sprintf("docker exec %s sh -c 'exit'", target.host.Alias))
 		}
 	} else {
 		testErr = runSSHTest(target.host, "exit")
@@ -198,6 +213,14 @@ func main() {
 				os.Exit(1)
 			}
 			cliTest(os.Args[2])
+			return
+		case "export":
+			_, hosts, _, err := loadConfig()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+				os.Exit(1)
+			}
+			fprintSSHConfig(os.Stdout, hosts)
 			return
 		case "_aliases":
 			_, hosts, _, err := loadConfig()
@@ -254,7 +277,7 @@ func main() {
 				return
 			}
 			parent := finalModel.rawHosts[parentIdx]
-			dockerCmd := fmt.Sprintf("docker exec -it %s sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'", h.Hostname)
+			dockerCmd := fmt.Sprintf("docker exec -it %s sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'", h.Alias)
 			sshArgs = buildSSHArgs(parent, true, dockerCmd)
 			password = parent.Password
 		} else {
