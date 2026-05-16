@@ -535,3 +535,86 @@ func TestFindHostByAlias(t *testing.T) {
 		t.Fatal("expected nil for missing alias")
 	}
 }
+
+func TestResolveAliasForCLITestPrefersTopLevelHost(t *testing.T) {
+	hosts := []Host{
+		{
+			ID:       "h1",
+			Alias:    "glance",
+			Hostname: "192.168.1.50",
+		},
+		{
+			ID:    "h2",
+			Alias: "docker-host",
+			Containers: []Host{
+				{ID: "c1", Alias: "glance", Hostname: "abc123", IsContainer: true},
+			},
+		},
+	}
+
+	target, err := resolveAliasForCLITest(hosts, "glance")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if target.host.ID != "h1" || target.host.IsContainer {
+		t.Fatalf("expected top-level host match, got %+v", target.host)
+	}
+	if target.parent != nil {
+		t.Fatal("expected no parent for top-level host target")
+	}
+}
+
+func TestResolveAliasForCLITestReturnsUniqueContainer(t *testing.T) {
+	hosts := []Host{
+		{
+			ID:    "h1",
+			Alias: "docker-host",
+			Containers: []Host{
+				{ID: "c1", Alias: "sonarr", Hostname: "abc123", IsContainer: true},
+			},
+		},
+	}
+
+	target, err := resolveAliasForCLITest(hosts, "sonarr")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !target.host.IsContainer || target.host.ID != "c1" {
+		t.Fatalf("expected container match, got %+v", target.host)
+	}
+	if target.parent == nil || target.parent.ID != "h1" {
+		t.Fatalf("expected parent host h1, got %+v", target.parent)
+	}
+}
+
+func TestResolveAliasForCLITestRejectsAmbiguousHosts(t *testing.T) {
+	hosts := []Host{
+		{ID: "h1", Alias: "web", Hostname: "10.0.0.1"},
+		{ID: "h2", Alias: "web", Hostname: "10.0.0.2"},
+	}
+
+	_, err := resolveAliasForCLITest(hosts, "web")
+	if err == nil || !strings.Contains(err.Error(), "ambiguous across multiple hosts") {
+		t.Fatalf("expected ambiguous host error, got %v", err)
+	}
+}
+
+func TestResolveAliasForCLITestRejectsAmbiguousContainers(t *testing.T) {
+	hosts := []Host{
+		{
+			ID:         "h1",
+			Alias:      "docker-a",
+			Containers: []Host{{ID: "c1", Alias: "pg", Hostname: "aaa", IsContainer: true}},
+		},
+		{
+			ID:         "h2",
+			Alias:      "docker-b",
+			Containers: []Host{{ID: "c2", Alias: "pg", Hostname: "bbb", IsContainer: true}},
+		},
+	}
+
+	_, err := resolveAliasForCLITest(hosts, "pg")
+	if err == nil || !strings.Contains(err.Error(), "ambiguous across multiple containers") {
+		t.Fatalf("expected ambiguous container error, got %v", err)
+	}
+}

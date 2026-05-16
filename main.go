@@ -13,6 +13,11 @@ import (
 
 var version = "dev"
 
+type resolvedAliasTarget struct {
+	host   Host
+	parent *Host
+}
+
 func findHostByAlias(hosts []Host, alias string) *Host {
 	lower := strings.ToLower(alias)
 	for i := range hosts {
@@ -26,6 +31,43 @@ func findHostByAlias(hosts []Host, alias string) *Host {
 		}
 	}
 	return nil
+}
+
+func resolveAliasForCLITest(hosts []Host, alias string) (*resolvedAliasTarget, error) {
+	lower := strings.ToLower(strings.TrimSpace(alias))
+	if lower == "" {
+		return nil, fmt.Errorf("host not found: %s", alias)
+	}
+
+	var hostMatches []Host
+	var containerMatches []resolvedAliasTarget
+	for i := range hosts {
+		if strings.ToLower(hosts[i].Alias) == lower {
+			hostMatches = append(hostMatches, hosts[i])
+		}
+		for j := range hosts[i].Containers {
+			if strings.ToLower(hosts[i].Containers[j].Alias) == lower {
+				parent := hosts[i]
+				containerMatches = append(containerMatches, resolvedAliasTarget{
+					host:   hosts[i].Containers[j],
+					parent: &parent,
+				})
+			}
+		}
+	}
+
+	switch {
+	case len(hostMatches) == 1:
+		return &resolvedAliasTarget{host: hostMatches[0]}, nil
+	case len(hostMatches) > 1:
+		return nil, fmt.Errorf("alias %q is ambiguous across multiple hosts", alias)
+	case len(containerMatches) == 1:
+		return &containerMatches[0], nil
+	case len(containerMatches) > 1:
+		return nil, fmt.Errorf("alias %q is ambiguous across multiple containers", alias)
+	default:
+		return nil, fmt.Errorf("host not found: %s", alias)
+	}
 }
 
 func cliList() {
@@ -86,14 +128,22 @@ func cliTest(alias string) {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
 	}
-	h := findHostByAlias(hosts, alias)
-	if h == nil {
-		fmt.Fprintf(os.Stderr, "host not found: %s\n", alias)
+	target, err := resolveAliasForCLITest(hosts, alias)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	cmd := testConnection(*h)
-	msg := cmd().(testConnectionMsg)
-	status, success := formatTestStatus(msg.err)
+	var testErr error
+	if target.host.IsContainer {
+		if target.parent == nil {
+			testErr = fmt.Errorf("container %q is missing its parent host reference", target.host.Alias)
+		} else {
+			testErr = runSSHTest(*target.parent, fmt.Sprintf("docker exec %s sh -c 'exit'", target.host.Hostname))
+		}
+	} else {
+		testErr = runSSHTest(target.host, "exit")
+	}
+	status, success := formatTestStatus(testErr)
 	if success {
 		fmt.Println("✔ " + status)
 		os.Exit(0)
