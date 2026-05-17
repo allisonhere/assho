@@ -26,7 +26,6 @@ func makeSaveFailingHome(t *testing.T) string {
 	return home
 }
 
-
 func TestSaveFromFormRollsBackOnSaveError(t *testing.T) {
 	makeSaveFailingHome(t)
 
