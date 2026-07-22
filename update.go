@@ -28,6 +28,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.form.testStatus, m.form.testResult = formatTestStatus(msg.err)
 		m.form.testing = false
 		return m, nil
+	case keyInstallFinishedMsg:
+		return m.finishKeyInstall(msg)
+	case rotationStepMsg:
+		return m.finishRotationStep(msg)
+	case rotationKeyReadyMsg:
+		return m.finishRotationKey(msg)
+	case hostTrustCheckMsg:
+		return m.handleHostTrustCheck(msg)
+	case hostTrustFinishedMsg:
+		return m.finishHostTrust(msg)
+	case hostTrustActionFailedMsg:
+		m.status.message = msg.err.Error()
+		m.status.isError = true
+		m.status.version++
+		return m, statusClearCmd(m.status.version)
 	case scanDockerMsg:
 		if !msg.background {
 			m.scanning = false
@@ -74,6 +89,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filepicker.Height = msg.Height - 8
 		return m, nil
 	case tea.KeyMsg:
+		if m.hostTrust.open {
+			return m.updateHostTrust(msg)
+		}
 		if m.helpOpen {
 			return m.updateHelp(msg)
 		}
@@ -91,6 +109,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateGroupPrompt(msg)
 		case stateHistory:
 			return m.updateHistory(msg)
+		case stateKeyInstall:
+			return m.updateKeyInstall(msg)
+		case stateRotation:
+			return m.updateRotation(msg)
 		}
 	}
 	// Forward non-key messages to the active sub-component (cursor blink, etc.)
@@ -129,15 +151,17 @@ func (m model) forwardMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateFilePicker:
 		m.filepicker, cmd = m.filepicker.Update(msg)
 	case stateForm:
-		if m.form.focusIndex >= 0 && m.form.focusIndex < len(m.form.inputs) {
-			if !(m.form.focusIndex == fieldKeyFile && m.form.keyPickFocus) {
-				m.form.inputs[m.form.focusIndex], cmd = m.form.inputs[m.form.focusIndex].Update(msg)
-			}
+		if field, ok := fieldForFormControl(m.form.focus); ok && m.formControlAcceptsText(m.form.focus) {
+			m.form.inputs[field], cmd = m.form.inputs[field].Update(msg)
 		}
 	case stateGroupPrompt:
 		m.groupPrompt.input, cmd = m.groupPrompt.input.Update(msg)
 	case stateHistory:
 		m.historyList, cmd = m.historyList.Update(msg)
+	case stateRotation:
+		if m.rotation.phase == rotationGenerateKey {
+			m.rotation.pathInput, cmd = m.rotation.pathInput.Update(msg)
+		}
 	}
 	return m, cmd
 }

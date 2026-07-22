@@ -82,6 +82,7 @@ Ctrl+D	Force re-scan Docker containers
 /	Filter / search
 h	Recent connection history
 i	Import from ~/.ssh/config
+K	Open staged fleet key rotation
 g	Create group
 r	Rename selected group
 Shift+\(ua / \(da	Reorder hosts or groups
@@ -94,12 +95,45 @@ q	Quit
 l l.
 Tab / \(da	Next field
 Shift+Tab / \(ua	Previous field
-Enter	Advance to next field; save on Notes
+Enter	Advance from text fields or activate the focused control
+Ctrl+S	Save from anywhere in the form
+Space / Enter	Toggle agent forwarding when focused
 \(<- / \(->	Cycle group selection
 Ctrl+T	Test connection
+Ctrl+K	Install public-key access for the host being edited
 ?	Keybinding reference
 Esc	Cancel
 .TE
+.PP
+Terminals at least 100 columns by 28 rows open the form in a centered modal
+over the dimmed dashboard, with a two-column workspace and contextual rail.
+Medium and compact terminals use an inset or full-screen scrolling workspace.
+The focused control remains visible as the form scrolls.
+Terminals smaller than 36 columns by 12 rows show a resize notice.
+.SS Key Rotation
+Press \fBK\fR on the dashboard to select saved hosts and perform a staged,
+sequential key rotation. The replacement public key is installed and verified
+before the local IdentityFile is changed or the old remote key is removed.
+Before removal, Assho backs up the standard ~/.ssh/authorized_keys file and
+performs a final replacement-key verification afterward. Failures are isolated
+to the affected host.
+.PP
+Incomplete runs can be resumed from journals in
+~/.config/assho/rotation-runs/. The directory is mode 0700 and journal files
+are mode 0600. Journals do not contain passwords or private-key contents.
+Assho manages only the standard ~/.ssh/authorized_keys path; alternate
+AuthorizedKeysFile or AuthorizedKeysCommand configurations require manual
+cleanup. The workflow requires ssh-copy-id and ssh-keygen. When an SSH agent is
+active, ssh-add is used once; without an agent, the selected identity is used
+directly and must pass strict verification before destructive steps. sshpass is
+optional.
+.SS Server Host-Key Trust
+Before TUI SSH actions, Assho checks the server against the standard user and
+system known-hosts files. Unknown servers pause the action and open a reviewed
+enrollment flow. OpenSSH displays the SHA256 fingerprint and writes an approved
+entry to ~/.ssh/known_hosts. Compare the fingerprint with the server console or
+another trusted source. Changed and revoked server keys are never replaced
+automatically.
 .SS History
 .TS
 l l.
@@ -133,7 +167,7 @@ Defaults to 22.
 Path to an SSH private key file (e.g.\&
 .IR ~/.ssh/id_rsa ).
 Use the
-.B Pick
+.B Browse
 button to browse.
 .TP
 .B Password
@@ -144,9 +178,7 @@ never written to the config file.
 .TP
 .B Fwd.\& Agent
 SSH agent forwarding.
-Set to
-.B yes
-to pass
+Toggle this control with Space or Enter to pass
 .B \-A
 to ssh, allowing the remote host to use your local keys.
 .TP
@@ -218,9 +250,9 @@ or
 to disable password persistence to the OS keychain.
 .TP
 .B ASSHO_INSECURE_TEST
-Set to
+Development only. Set to
 .B 1
-to skip host key verification during connection tests
+to bypass host key verification during connection tests
 .RB ( assho\ test ).
 .SH FILES
 .TP

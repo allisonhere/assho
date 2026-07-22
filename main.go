@@ -278,10 +278,10 @@ func main() {
 			}
 			parent := finalModel.rawHosts[parentIdx]
 			dockerCmd := fmt.Sprintf("docker exec -it %s sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'", h.Alias)
-			sshArgs = buildSSHArgs(parent, true, dockerCmd)
+			sshArgs = buildTrustedSSHArgs(parent, true, dockerCmd)
 			password = parent.Password
 		} else {
-			sshArgs = buildSSHArgs(*h, false, "")
+			sshArgs = buildTrustedSSHArgs(*h, false, "")
 			password = h.Password
 		}
 

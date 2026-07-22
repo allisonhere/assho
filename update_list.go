@@ -229,6 +229,8 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.rebuildHistoryList()
 		m.state = stateHistory
 		return m, nil
+	case "K":
+		return m.openRotation()
 	case "?":
 		m.helpOpen = true
 		return m, nil

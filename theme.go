@@ -187,6 +187,7 @@ func renderListHelp(selected list.Item) string {
 
 	baseEntries := []string{
 		helpEntry("n", "new"),
+		helpEntry("K", "rotate keys"),
 		helpEntry("g", "group"),
 		helpEntry("/", "filter"),
 		helpEntry("h", "history"),
@@ -207,9 +208,11 @@ func renderListHelp(selected list.Item) string {
 
 func renderFormHelp() string {
 	entries := []string{
+		helpEntry("ctrl+s", "save"),
 		helpEntry("tab", "next"),
-		helpEntry("enter", "next/save"),
+		helpEntry("enter", "activate"),
 		helpEntry("ctrl+t", "test conn"),
+		helpEntry("ctrl+k", "install key"),
 		helpEntry("pick", "key file"),
 		helpEntry("←→", "group"),
 		helpEntry("?", "help"),

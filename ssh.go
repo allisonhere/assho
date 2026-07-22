@@ -23,9 +23,14 @@ type testConnectionMsg struct {
 }
 
 func testConnection(h Host) tea.Cmd {
-	return func() tea.Msg {
-		return testConnectionMsg{err: runSSHTest(h, "exit")}
+	if allowInsecureTest() {
+		return testConnectionTrusted(h)
 	}
+	return checkHostTrustCmd(pendingSSHAction{kind: sshActionTest, host: h, trustHost: h})
+}
+
+func testConnectionTrusted(h Host) tea.Cmd {
+	return func() tea.Msg { return testConnectionMsg{err: runSSHTest(h, "exit")} }
 }
 
 func runSSHTest(h Host, remoteCmd string) error {
@@ -102,6 +107,10 @@ func runSSHTest(h Host, remoteCmd string) error {
 }
 
 func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
+	return checkHostTrustCmd(pendingSSHAction{kind: sshActionScan, host: h, trustHost: h, hostIndex: index, background: background})
+}
+
+func scanDockerContainersTrusted(h Host, index int, background bool) tea.Cmd {
 	return func() tea.Msg {
 		// Run ssh command to get docker containers
 		// docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}"
@@ -110,6 +119,7 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 		args := []string{
 			"-o", "BatchMode=yes",
 			"-o", "ConnectTimeout=5",
+			"-o", "StrictHostKeyChecking=yes",
 		}
 		args = append(args, h.Hostname)
 		if h.User != "" {
@@ -173,7 +183,18 @@ func scanDockerContainers(h Host, index int, background bool) tea.Cmd {
 }
 
 func buildSSHArgs(h Host, forceTTY bool, remoteCmd string) []string {
+	return buildSSHArgsWithTrust(h, forceTTY, remoteCmd, false)
+}
+
+func buildTrustedSSHArgs(h Host, forceTTY bool, remoteCmd string) []string {
+	return buildSSHArgsWithTrust(h, forceTTY, remoteCmd, true)
+}
+
+func buildSSHArgsWithTrust(h Host, forceTTY bool, remoteCmd string, strictHostKey bool) []string {
 	args := []string{}
+	if strictHostKey {
+		args = append(args, "-o", "StrictHostKeyChecking=yes")
+	}
 	if forceTTY {
 		args = append(args, "-t")
 	}
@@ -227,7 +248,7 @@ func formatTestStatus(err error) (string, bool) {
 	if strings.Contains(msg, "Host key verification failed") ||
 		strings.Contains(msg, "authenticity of host") ||
 		strings.Contains(msg, "No RSA host key is known") {
-		return "Host key is unknown. Run `ssh <host>` once or set ASSHO_INSECURE_TEST=1 to bypass for testing.", false
+		return "Host key is unknown. Retry the action to review its fingerprint.", false
 	}
 	return msg, false
 }

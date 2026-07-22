@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func makeSaveFailingHome(t *testing.T) string {
@@ -227,7 +225,9 @@ func TestUpdateEnterRollsBackHistoryOnSaveError(t *testing.T) {
 		historyList: newTestHistoryListModel(),
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Host trust is tested separately; exercise the post-trust connection path
+	// here so this remains a focused history rollback test.
+	updated, _ := m.connectToHostTrusted(host)
 	got := updated.(model)
 
 	if got.sshToRun != nil {

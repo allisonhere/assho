@@ -36,6 +36,9 @@ Stop typing `ssh root@192.168.1.47 -p 2222 -i ~/.ssh/id_rsa` from memory. Assho 
 - **Fuzzy search** — type `/` and filter across all hosts and groups by alias or hostname.
 - **Connection testing** — verify connectivity before saving with `Ctrl+T`.
 - **Identity file picker** — browse and select SSH keys with a built-in file picker.
+- **Public-key installation** — from an existing host form, press `Ctrl+K` to install its configured public key, an agent/default identity, or a separately browsed `.pub` file. Private keys never leave your machine.
+- **Staged fleet key rotation** — press `K` on the dashboard to rotate selected hosts sequentially. Assho verifies the replacement key before updating local config or removing the old remote key, keeps remote backups, and journals incomplete runs for safe resume.
+- **Reviewed host trust** — unknown SSH servers pause the current action and open a fingerprint review flow. OpenSSH records approved keys in `~/.ssh/known_hosts`; changed or revoked server keys are never replaced automatically.
 - **Secure password storage** — passwords stored in your OS keychain (macOS Keychain / Linux `secret-tool`), never in plaintext.
 - **Cross-platform** — Linux (amd64/arm64) and macOS (Intel/Apple Silicon).
 
@@ -124,6 +127,7 @@ assho completion fish > ~/.config/fish/completions/assho.fish
 | `/` | Filter / search |
 | `h` | Recent connection history |
 | `i` | Import hosts from `~/.ssh/config` |
+| `K` | Open staged fleet key rotation |
 | `Shift+↑` / `Shift+↓` | Reorder hosts / groups |
 | `g` | Create group |
 | `r` | Rename selected group |
@@ -146,18 +150,33 @@ assho completion fish > ~/.config/fish/completions/assho.fish
 |---|---|
 | `Tab` / `↓` | Next field |
 | `Shift+Tab` / `↑` | Previous field |
-| `Enter` | Advance to next field, or save on the `Notes` field |
-| `Enter` | Open file picker (when the `Pick` control beside `Key File` is focused) |
+| `Enter` | Advance from text fields or activate the focused picker, toggle, selector, or delete action |
+| `Ctrl+S` | Save from anywhere in the form |
+| `Space` / `Enter` | Toggle agent forwarding when that control is focused |
+| `Enter` | Open the file picker when `Browse` is focused |
 | `←` / `→` | Cycle group selection |
-| `Ctrl+T` | Test connection and show status in the form sidebar |
+| `Ctrl+T` | Test the connection and show its status |
+| `Ctrl+K` | Install public-key access for the host being edited |
 | `?` | Keybinding help |
 | `Esc` | Cancel |
 
-On wider terminals, the add/edit screen renders as a main form with a side panel for actions and status. On narrower terminals, it falls back to a stacked layout.
+The form responds to both terminal width and height. Terminals at least 100 columns by 28 rows open a centered modal over the dimmed dashboard, with a two-column form and contextual rail. Medium and compact terminals switch to an inset or full-screen scrolling workspace automatically. The focused control is always kept in view. Terminals smaller than 36 columns by 12 rows show a resize notice instead of overflowing.
+
+#### Key Rotation
+
+Fleet rotation is intended for small-to-medium sets of saved SSH hosts. Select hosts, choose an existing private key or generate a new Ed25519 key, and confirm. For each host Assho preflights access, installs the public key, authenticates using only the replacement key, updates the saved `IdentityFile`, backs up `~/.ssh/authorized_keys`, removes the exact old key, and verifies once more. A host failure stops destructive steps for that host but does not stop later hosts.
+
+Rotation journals are stored with mode `0600` under `~/.config/assho/rotation-runs/`; the directory uses mode `0700`. Journals contain paths, fingerprints, stages, and errors—never passwords or private-key contents. Assho manages the standard `~/.ssh/authorized_keys` file only. Hosts using `AuthorizedKeysCommand` or a nonstandard `AuthorizedKeysFile` need manual cleanup. Large fleets should use SSH certificates or configuration management instead.
+
+The workflow requires OpenSSH tools (`ssh`, `ssh-copy-id`, and `ssh-keygen`). When an SSH agent is active, Assho uses `ssh-add` once so passphrase-protected identities can be reused across the run; without an agent, it uses the selected identity directly and the strict verification step safely rejects an unusable key before anything destructive happens. `sshpass` remains optional and is used through its environment interface when a saved password is available; otherwise the terminal presents the normal interactive SSH prompt.
+
+#### Server host-key trust
+
+Before any TUI SSH action, Assho checks the server against the standard user and system known-hosts files. An unknown server opens a confirmation overlay, then hands control to OpenSSH so it can display the SHA256 fingerprint and write an approved entry itself. Compare that fingerprint with the server console or another trusted source. Assho never silently accepts or replaces a changed host key; a mismatch remains a hard failure.
 
 ### Form Fields
 
-#### ENDPOINT
+#### Endpoint
 
 | Field | Description |
 |---|---|
@@ -166,31 +185,26 @@ On wider terminals, the add/edit screen renders as a main form with a side panel
 | User | SSH username |
 | Port | SSH port (default: 22) |
 
-#### AUTH
+#### Authentication
 
 | Field | Description |
 |---|---|
-| Key File | Path to identity file; use the `Pick` button to browse |
+| Key File | Path to identity file; use the `Browse` control to select a file |
 | Password | Stored in your OS keychain, not in the config file |
-| Fwd. Agent | Set to `yes` to enable SSH agent forwarding (`-A`) |
+| Fwd. Agent | Toggle SSH agent forwarding (`-A`) with `Space` or `Enter` |
 
-#### ADVANCED
+#### Routing
 
 | Field | Description |
 |---|---|
 | ProxyJump | Jump host in `[user@]host[:port]` format, passed to SSH's `-J` |
 | LocalFwd | Port tunnel in `local:host:remote` format, passed to SSH's `-L` |
 
-#### ORGANIZATION
+#### Details
 
 | Field | Description |
 |---|---|
 | Group | Assign to an existing group or create a new one |
-
-#### METADATA
-
-| Field | Description |
-|---|---|
 | Notes | Free-text note shown in the host list |
 
 ## Configuration
@@ -202,7 +216,7 @@ Sessions are stored in `~/.config/assho/hosts.json` (mode `0600`).
 | Variable | Description |
 |---|---|
 | `ASSHO_STORE_PASSWORD` | Set to `0` or `false` to disable password persistence |
-| `ASSHO_INSECURE_TEST` | Set to `1` to skip host key verification during connection tests |
+| `ASSHO_INSECURE_TEST` | Development only: set to `1` to bypass host-key verification for connection tests |
 
 ## Built With
 

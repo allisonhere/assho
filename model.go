@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -34,6 +35,8 @@ const (
 	stateFilePicker
 	stateGroupPrompt
 	stateHistory
+	stateKeyInstall
+	stateRotation
 )
 
 // Form field indices (must match newFormInputs order).
@@ -50,6 +53,27 @@ const (
 	fieldGroup        = 9
 	fieldNotes        = 10
 	fieldCount        = 11
+)
+
+// formControl describes the keyboard focus order independently from the
+// underlying data fields. Controls such as the key picker and delete action
+// participate in navigation without pretending to be text inputs.
+type formControl int
+
+const (
+	controlAlias formControl = iota
+	controlHostname
+	controlUser
+	controlPort
+	controlKeyFile
+	controlKeyPicker
+	controlPassword
+	controlForwardAgent
+	controlProxyJump
+	controlLocalForward
+	controlGroup
+	controlNotes
+	controlDelete
 )
 
 type model struct {
@@ -74,15 +98,18 @@ type model struct {
 	about       aboutState
 	helpOpen    bool
 	headerFrame int
+	pickerUse   filePickerPurpose
+	keyInstall  keyInstallState
+	rotation    rotationState
+	hostTrust   hostTrustState
 }
 
 type formState struct {
 	inputs       []textinput.Model
-	focusIndex   int
+	focus        formControl
+	viewport     viewport.Model
 	selectedHost *Host  // For editing
 	formError    string // inline form validation/action error
-	keyPickFocus bool   // true when [Pick] button on key field is focused
-	deleteFocus  bool   // true when Delete Host button is focused
 	deleteArmed  bool   // true when delete confirmation is armed
 	testStatus   string // Status message for connection test
 	testResult   bool   // true = success, false = failure
@@ -271,12 +298,11 @@ func countContainers(hosts []Host) int {
 
 func newFormInputs() []textinput.Model {
 	inputs := make([]textinput.Model, fieldCount)
-	labels := []string{"Alias", "Hostname", "User", "Port", "Key File", "Password", "Fwd. Agent", "ProxyJump", "LocalFwd", "Group", "Notes"}
 	placeholders := []string{"my-server", "192.168.1.100", "root", "22", "optional key path", "", "yes to enable (-A)", "user@bastion:port", "5432:localhost:5432", "optional group name", "optional note"}
 	for i := range inputs {
 		t := textinput.New()
 		t.Cursor.Style = lipgloss.NewStyle().Foreground(colorSecondary)
-		t.Prompt = fmt.Sprintf("  %-12s", labels[i])
+		t.Prompt = ""
 		t.PromptStyle = lipgloss.NewStyle().Foreground(colorHighlight).Bold(true)
 		t.TextStyle = lipgloss.NewStyle().Foreground(colorText)
 		t.Placeholder = placeholders[i]
@@ -289,6 +315,14 @@ func newFormInputs() []textinput.Model {
 		inputs[i] = t
 	}
 	return inputs
+}
+
+func newFormState(inputs []textinput.Model) formState {
+	return formState{
+		inputs:   inputs,
+		focus:    controlAlias,
+		viewport: viewport.New(0, 0),
+	}
 }
 
 func initialModel() model {
@@ -357,7 +391,7 @@ func initialModel() model {
 		list:        l,
 		rawGroups:   groups,
 		rawHosts:    hosts,
-		form:        formState{inputs: inputs},
+		form:        newFormState(inputs),
 		groupPrompt: groupPromptState{input: groupInput},
 		filepicker:  fp,
 		spinner:     sp,
@@ -419,11 +453,10 @@ func findGroupByName(groups []Group, name string) int {
 
 func (m *model) focusInputs() tea.Cmd {
 	cmds := make([]tea.Cmd, len(m.form.inputs))
-	m.form.deleteFocus = false
-	m.form.deleteArmed = false
+	focusedField, hasField := fieldForFormControl(m.form.focus)
 	for i := 0; i < len(m.form.inputs); i++ {
-		if i == m.form.focusIndex {
-			m.form.keyPickFocus = false
+		editable := hasField && i == focusedField && m.formControlAcceptsText(m.form.focus)
+		if editable {
 			cmds[i] = m.form.inputs[i].Focus()
 			// Put cursor at end so editing existing values behaves naturally.
 			m.form.inputs[i].CursorEnd()
@@ -439,10 +472,8 @@ func (m *model) focusInputs() tea.Cmd {
 }
 
 func (m *model) resetForm() {
-	m.form.focusIndex = 0
+	m.form.focus = controlAlias
 	m.form.formError = ""
-	m.form.keyPickFocus = false
-	m.form.deleteFocus = false
 	m.form.deleteArmed = false
 	for i := range m.form.inputs {
 		m.form.inputs[i].Reset()
@@ -452,6 +483,46 @@ func (m *model) resetForm() {
 	m.form.inputs[fieldPort].SetValue("22")
 	m.form.inputs[fieldPort].CursorEnd()
 	m.form.inputs[fieldAlias].Focus()
+}
+
+func fieldForFormControl(control formControl) (int, bool) {
+	switch control {
+	case controlAlias:
+		return fieldAlias, true
+	case controlHostname:
+		return fieldHostname, true
+	case controlUser:
+		return fieldUser, true
+	case controlPort:
+		return fieldPort, true
+	case controlKeyFile, controlKeyPicker:
+		return fieldKeyFile, true
+	case controlPassword:
+		return fieldPassword, true
+	case controlForwardAgent:
+		return fieldForwardAgent, true
+	case controlProxyJump:
+		return fieldProxyJump, true
+	case controlLocalForward:
+		return fieldLocalForward, true
+	case controlGroup:
+		return fieldGroup, true
+	case controlNotes:
+		return fieldNotes, true
+	default:
+		return 0, false
+	}
+}
+
+func (m model) formControlAcceptsText(control formControl) bool {
+	if control == controlForwardAgent || control == controlKeyPicker || control == controlDelete {
+		return false
+	}
+	if control == controlGroup && !m.form.groupCustom {
+		return false
+	}
+	_, ok := fieldForFormControl(control)
+	return ok
 }
 
 func (m *model) populateForm(h Host) {
@@ -804,6 +875,16 @@ func (m *model) clearListDeleteConfirm() {
 }
 
 func (m model) connectToHost(h Host) (tea.Model, tea.Cmd) {
+	trustHost := h
+	if h.IsContainer && h.ParentID != "" {
+		if parentIndex := findHostIndexByID(m.rawHosts, h.ParentID); parentIndex >= 0 {
+			trustHost = m.rawHosts[parentIndex]
+		}
+	}
+	return m, checkHostTrustCmd(pendingSSHAction{kind: sshActionConnect, host: h, trustHost: trustHost})
+}
+
+func (m model) connectToHostTrusted(h Host) (tea.Model, tea.Cmd) {
 	m.clearListDeleteConfirm()
 	snapshot := m.snapshot()
 	m.history = recordHistory(h.ID, h.Alias, m.history)

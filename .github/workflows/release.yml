@@ -70,8 +70,17 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Extract release notes
+        run: |
+          awk -v version="${GITHUB_REF_NAME}" '
+            $0 ~ "^## " version " " { capture = 1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: release-notes.md
